@@ -13,9 +13,11 @@ class SubmissionService:
         source_code: str,
         language: Language,
         filename: str | None = None,
+        user_id: UUID | None = None,
     ) -> CodeSubmission:
         validation = validate_source_code(source_code, language)
         submission = CodeSubmission(
+            user_id=user_id,
             language=language,
             source_code=source_code,
             filename=filename,
@@ -35,9 +37,11 @@ class SubmissionService:
         source_code: str,
         language: Language,
         filename: str,
+        user_id: UUID | None = None,
     ) -> CodeSubmission:
         validation = validate_source_code(source_code, language)
         submission = CodeSubmission(
+            user_id=user_id,
             language=language,
             source_code=source_code,
             filename=filename,
@@ -56,6 +60,12 @@ class SubmissionService:
 
     def list_submissions(self, db: Session, skip: int = 0, limit: int = 20) -> tuple[list[CodeSubmission], int]:
         query = db.query(CodeSubmission).order_by(CodeSubmission.created_at.desc())
+        total = query.count()
+        items = query.offset(skip).limit(limit).all()
+        return items, total
+
+    def list_user_submissions(self, db: Session, user_id: UUID, skip: int = 0, limit: int = 20) -> tuple[list[CodeSubmission], int]:
+        query = db.query(CodeSubmission).filter(CodeSubmission.user_id == user_id).order_by(CodeSubmission.created_at.desc())
         total = query.count()
         items = query.offset(skip).limit(limit).all()
         return items, total

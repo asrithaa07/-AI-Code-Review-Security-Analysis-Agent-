@@ -19,6 +19,8 @@ class Settings(BaseSettings):
 
     gemini_api_key: str = ""
     llm_model: str = "gemini-2.0-flash"
+    secret_key: str = "super-secret-key-for-development-spotlight-ai"
+    access_token_expire_minutes: int = 10080  # 7 days in minutes
 
     @property
     def cors_origin_list(self) -> list[str]:

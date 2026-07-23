@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, Integer, JSON, String, Text, Uuid, func
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, JSON, String, Text, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -29,6 +29,9 @@ class CodeSubmission(Base):
     __tablename__ = "code_submissions"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     language: Mapped[Language] = mapped_column(Enum(Language), nullable=False)
     source_code: Mapped[str] = mapped_column(Text, nullable=False)
     filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
