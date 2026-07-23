@@ -8,6 +8,18 @@ export interface ValidationError {
   message: string;
 }
 
+export interface Finding {
+  id: string;
+  agent_source: "code_analysis" | "security_vulnerability";
+  category: string;
+  severity: "critical" | "high" | "medium" | "low" | "info";
+  title: string;
+  description: string;
+  line_number: number | null;
+  cwe_id: string | null;
+  owasp_category: string | null;
+}
+
 export interface Submission {
   id: string;
   language: Language;
@@ -16,6 +28,8 @@ export interface Submission {
   submission_type: "paste" | "upload";
   is_valid_syntax: boolean;
   validation_errors: ValidationError[] | null;
+  findings: Finding[] | null;
+  severity_scores: Record<string, number> | null;
   status: "pending" | "analyzing" | "completed" | "failed";
   created_at: string;
   updated_at: string;
@@ -152,6 +166,13 @@ export async function queryKnowledgeBase(query: string, topK = 4): Promise<{ que
     body: JSON.stringify({ query, top_k: topK }),
   });
   return handleResponse(response);
+}
+
+export async function getSubmissionDetails(submissionId: string): Promise<Submission> {
+  const response = await fetch(`${API_URL}/api/v1/submissions/${submissionId}`, {
+    headers: getHeaders(),
+  });
+  return handleResponse<Submission>(response);
 }
 
 export async function checkHealth(): Promise<{ status: string }> {

@@ -49,10 +49,18 @@ export function Dashboard({ onSelectSubmission, refreshTrigger }: DashboardProps
   const pythonCount = submissions.filter(s => s.language === "python").length;
   const javaCount = submissions.filter(s => s.language === "java").length;
   const passCount = submissions.filter(s => s.is_valid_syntax).length;
-  const passRate = totalSubmissions > 0 ? Math.round((passCount / submissions.length) * 100) : 0;
+  const passRate = submissions.length > 0 ? Math.round((passCount / submissions.length) * 100) : 0;
   
-  const vulnCount = submissions.reduce((acc, curr) => {
-    return acc + (curr.validation_errors?.length || 0);
+  const securityIssuesCount = submissions.reduce((acc, curr) => {
+    return acc + (curr.findings?.filter(f => f.agent_source === "security_vulnerability").length || 0);
+  }, 0);
+
+  const codeSmellsCount = submissions.reduce((acc, curr) => {
+    return acc + (curr.findings?.filter(f => f.agent_source === "code_analysis").length || 0);
+  }, 0);
+
+  const severeCount = submissions.reduce((acc, curr) => {
+    return acc + (curr.findings?.filter(f => f.severity === "critical" || f.severity === "high").length || 0);
   }, 0);
 
   return (
@@ -85,44 +93,41 @@ export function Dashboard({ onSelectSubmission, refreshTrigger }: DashboardProps
           </CardContent>
         </Card>
 
-        {/* Language Breakdown */}
+        {/* Security Vulnerabilities */}
         <Card className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-md rounded-2xl overflow-hidden">
           <CardContent className="p-6 flex items-center justify-between">
             <div className="space-y-1">
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Languages</p>
-              <div className="flex gap-4 items-baseline mt-1">
-                <span className="text-lg font-bold text-slate-700 dark:text-slate-300">🐍 {pythonCount} py</span>
-                <span className="text-lg font-bold text-slate-700 dark:text-slate-300">☕ {javaCount} java</span>
-              </div>
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Security Vulnerabilities</p>
+              <h3 className="text-3xl font-extrabold text-red-600 dark:text-red-400">{securityIssuesCount}</h3>
             </div>
-            <div className="h-12 w-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+            <div className="h-12 w-12 rounded-2xl bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 flex items-center justify-center">
+              <AlertTriangle className="h-6 w-6" />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Code Smells */}
+        <Card className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-md rounded-2xl overflow-hidden">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div className="space-y-1">
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Code Quality Smells</p>
+              <h3 className="text-3xl font-extrabold text-amber-600 dark:text-amber-500">{codeSmellsCount}</h3>
+            </div>
+            <div className="h-12 w-12 rounded-2xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-500 flex items-center justify-center">
               <Code className="h-6 w-6" />
             </div>
           </CardContent>
         </Card>
 
-        {/* Syntax Pass Rate */}
+        {/* Severe Findings */}
         <Card className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-md rounded-2xl overflow-hidden">
           <CardContent className="p-6 flex items-center justify-between">
             <div className="space-y-1">
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Syntax Pass Rate</p>
-              <h3 className="text-3xl font-extrabold text-slate-900 dark:text-white">{passRate}%</h3>
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Critical & High Vulnerabilities</p>
+              <h3 className="text-3xl font-extrabold text-purple-600 dark:text-purple-400">{severeCount}</h3>
             </div>
-            <div className="h-12 w-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-              <CheckCircle2 className="h-6 w-6" />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Vulnerabilities Caught */}
-        <Card className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-md rounded-2xl overflow-hidden">
-          <CardContent className="p-6 flex items-center justify-between">
-            <div className="space-y-1">
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Vulnerabilities Flagged</p>
-              <h3 className="text-3xl font-extrabold text-slate-900 dark:text-white">{vulnCount}</h3>
-            </div>
-            <div className="h-12 w-12 rounded-2xl bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 flex items-center justify-center">
-              <AlertTriangle className="h-6 w-6" />
+            <div className="h-12 w-12 rounded-2xl bg-purple-50 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+              <ShieldCheck className="h-6 w-6" />
             </div>
           </CardContent>
         </Card>
@@ -186,16 +191,43 @@ export function Dashboard({ onSelectSubmission, refreshTrigger }: DashboardProps
                           {sub.submission_type}
                         </td>
                         <td className="py-4 px-6">
-                          {sub.is_valid_syntax ? (
-                            <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                              <CheckCircle2 className="h-3.5 w-3.5" />
-                              Syntax OK
+                          {sub.status === "pending" && (
+                            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                              Pending
                             </span>
-                          ) : (
+                          )}
+                          {sub.status === "analyzing" && (
+                            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400">
+                              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                              Analyzing...
+                            </span>
+                          )}
+                          {sub.status === "failed" && (
                             <span className="inline-flex items-center gap-1.5 text-xs font-bold text-red-600 dark:text-red-400">
                               <AlertTriangle className="h-3.5 w-3.5" />
-                              Errors Found
+                              Failed
                             </span>
+                          )}
+                          {sub.status === "completed" && (
+                            <div className="flex flex-col gap-0.5">
+                              {sub.findings && sub.findings.length > 0 ? (
+                                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-red-600 dark:text-red-400">
+                                  <AlertTriangle className="h-3.5 w-3.5" />
+                                  {sub.findings.length} findings
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                                  <CheckCircle2 className="h-3.5 w-3.5" />
+                                  Secure (0 issues)
+                                </span>
+                              )}
+                              {sub.severity_scores && (
+                                <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
+                                  Crit:{sub.severity_scores.critical} Hi:{sub.severity_scores.high} Med:{sub.severity_scores.medium} Lo:{sub.severity_scores.low}
+                                </span>
+                              )}
+                            </div>
                           )}
                         </td>
                         <td className="py-4 px-6 text-xs text-slate-500 dark:text-slate-400">

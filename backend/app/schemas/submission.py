@@ -28,6 +28,18 @@ class ValidationErrorDetail(BaseModel):
     message: str
 
 
+class FindingDetail(BaseModel):
+    id: str
+    agent_source: str
+    category: str
+    severity: str
+    title: str
+    description: str
+    line_number: int | None = None
+    cwe_id: str | None = None
+    owasp_category: str | None = None
+
+
 class PasteSubmissionRequest(BaseModel):
     source_code: str = Field(..., min_length=1, max_length=500_000)
     language: LanguageEnum
@@ -50,6 +62,8 @@ class SubmissionResponse(BaseModel):
     submission_type: SubmissionTypeEnum
     is_valid_syntax: bool
     validation_errors: list[ValidationErrorDetail] | None
+    findings: list[FindingDetail] | None = None
+    severity_scores: dict[str, int] | None = None
     status: SubmissionStatusEnum
     created_at: datetime
     updated_at: datetime

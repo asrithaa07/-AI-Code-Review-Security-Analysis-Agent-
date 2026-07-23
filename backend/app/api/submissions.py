@@ -1,6 +1,5 @@
 from uuid import UUID
-
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, Response
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, Response, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -15,6 +14,7 @@ from app.schemas.submission import (
 from app.services.code_validator import detect_language_from_filename
 from app.services.submission_service import submission_service
 from app.services.report_generator import report_generator
+from app.agents.orchestrator import run_agent_analysis_pipeline
 
 router = APIRouter()
 
@@ -24,6 +24,7 @@ MAX_FILE_SIZE = 500_000  # 500 KB
 @router.post("/paste", response_model=SubmissionResponse, status_code=201)
 def submit_paste(
     payload: PasteSubmissionRequest,
+    background_tasks: BackgroundTasks,
     current_user: User | None = Depends(get_current_user_optional),
     db: Session = Depends(get_db),
 ):
@@ -34,11 +35,16 @@ def submit_paste(
         filename=payload.filename,
         user_id=current_user.id if current_user else None,
     )
+    
+    # Trigger background multi-agent analysis pipeline
+    background_tasks.add_task(run_agent_analysis_pipeline, submission.id)
+    
     return submission
 
 
 @router.post("/upload", response_model=SubmissionResponse, status_code=201)
 async def submit_upload(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     current_user: User | None = Depends(get_current_user_optional),
     db: Session = Depends(get_db),
@@ -72,6 +78,10 @@ async def submit_upload(
         filename=file.filename,
         user_id=current_user.id if current_user else None,
     )
+    
+    # Trigger background multi-agent analysis pipeline
+    background_tasks.add_task(run_agent_analysis_pipeline, submission.id)
+    
     return submission
 
 

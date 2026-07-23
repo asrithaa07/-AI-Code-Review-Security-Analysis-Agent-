@@ -29,14 +29,17 @@ export default function Home() {
   const handleSubmissionComplete = (submission: Submission) => {
     setLatestSubmission(submission);
     setDashboardRefresh((prev) => prev + 1); // increment refresh key
+    setTimeout(() => {
+      scrollToSection("results-section");
+    }, 150);
   };
 
   const handleSelectHistorySubmission = (submission: Submission) => {
     setLatestSubmission(submission);
     setCurrentView("console");
     setTimeout(() => {
-      scrollToSection("analysis-portal");
-    }, 100);
+      scrollToSection("results-section");
+    }, 150);
   };
 
   return (
@@ -181,28 +184,14 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="grid gap-8 lg:grid-cols-2 items-start">
+              <div className="space-y-10">
                 <CodeSubmissionForm onSubmissionComplete={handleSubmissionComplete} />
 
-                <div className="h-full">
-                  {latestSubmission ? (
+                {latestSubmission && (
+                  <div id="results-section" className="scroll-mt-24 animate-in fade-in slide-in-from-bottom-6 duration-500">
                     <SubmissionResult submission={latestSubmission} />
-                  ) : (
-                    <div className="flex h-[450px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center dark:border-slate-800 dark:bg-slate-900/40">
-                      <div className="max-w-sm space-y-4">
-                        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-50 text-slate-400 dark:bg-slate-900 dark:text-slate-600">
-                          <Code2 className="h-8 w-8" />
-                        </div>
-                        <div className="space-y-1">
-                          <h4 className="text-base font-semibold text-slate-950 dark:text-white">Awaiting Submission</h4>
-                          <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
-                            Pasted code or uploaded source files will be checked for syntax correctness and key guidelines.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             </section>
 

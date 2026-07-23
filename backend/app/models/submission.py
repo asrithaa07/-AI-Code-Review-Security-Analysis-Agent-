@@ -40,6 +40,8 @@ class CodeSubmission(Base):
     )
     is_valid_syntax: Mapped[bool] = mapped_column(Boolean, default=False)
     validation_errors: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    findings: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    severity_scores: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     status: Mapped[SubmissionStatus] = mapped_column(
         Enum(SubmissionStatus), default=SubmissionStatus.pending
     )

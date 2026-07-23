@@ -131,8 +131,96 @@ class ReportGenerator:
         story.append(status_table)
         story.append(Spacer(1, 15))
 
-        # Vulnerabilities / Warnings Section
-        if submission.validation_errors:
+        # Multi-Agent Findings Section
+        has_findings = hasattr(submission, "findings") and submission.findings
+        
+        if has_findings:
+            story.append(Paragraph("Severity Summary Matrix", subtitle_style))
+            story.append(Spacer(1, 5))
+            
+            scores = getattr(submission, "severity_scores", None) or {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
+            summary_data = [
+                [
+                    Paragraph("<b>Critical</b>", body_style),
+                    Paragraph("<b>High</b>", body_style),
+                    Paragraph("<b>Medium</b>", body_style),
+                    Paragraph("<b>Low</b>", body_style),
+                    Paragraph("<b>Info</b>", body_style)
+                ],
+                [
+                    Paragraph(f"<font color='#ef4444'><b>{scores.get('critical', 0)}</b></font>", body_style),
+                    Paragraph(f"<font color='#f97316'><b>{scores.get('high', 0)}</b></font>", body_style),
+                    Paragraph(f"<font color='#eab308'><b>{scores.get('medium', 0)}</b></font>", body_style),
+                    Paragraph(f"<font color='#3b82f6'><b>{scores.get('low', 0)}</b></font>", body_style),
+                    Paragraph(f"<font color='#64748b'><b>{scores.get('info', 0)}</b></font>", body_style),
+                ]
+            ]
+            summary_table = Table(summary_data, colWidths=[108]*5)
+            summary_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
+                ('PADDING', (0, 0), (-1, -1), 8),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('LINEBELOW', (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),
+                ('BOX', (0, 0), (-1, -1), 1, colors.HexColor("#cbd5e1")),
+            ]))
+            story.append(summary_table)
+            story.append(Spacer(1, 15))
+
+            story.append(Paragraph("Detailed Review Findings", subtitle_style))
+            story.append(Spacer(1, 5))
+
+            findings_data = [[
+                Paragraph("<b>Line</b>", body_style),
+                Paragraph("<b>Severity</b>", body_style),
+                Paragraph("<b>Finding Detail</b>", body_style)
+            ]]
+
+            for f in getattr(submission, "findings", []):
+                line_str = f"L{f.get('line_number')}" if f.get('line_number') is not None else "Global"
+                severity_str = str(f.get('severity', 'info')).upper()
+                
+                # Determine colors based on severity
+                if severity_str == "CRITICAL":
+                    sev_color = "#ef4444"
+                elif severity_str == "HIGH":
+                    sev_color = "#f97316"
+                elif severity_str == "MEDIUM":
+                    sev_color = "#eab308"
+                elif severity_str == "LOW":
+                    sev_color = "#3b82f6"
+                else:
+                    sev_color = "#64748b"
+                
+                title = f.get('title', 'Finding')
+                desc = f.get('description', '')
+                category = f.get('category', '').replace('_', ' ').title()
+                
+                cwe = f.get('cwe_id')
+                owasp = f.get('owasp_category')
+                meta_info = f" | {cwe}" if cwe else ""
+                meta_info += f" | {owasp}" if owasp else ""
+                
+                detail_html = f"<b>{title}</b> ({category}{meta_info})<br/><font color='#475569'>{desc}</font>"
+                
+                findings_data.append([
+                    Paragraph(line_str, body_style),
+                    Paragraph(f"<font color='{sev_color}'><b>{severity_str}</b></font>", body_style),
+                    Paragraph(detail_html, body_style)
+                ])
+
+            findings_table = Table(findings_data, colWidths=[60, 80, 400])
+            findings_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#f8fafc")),
+                ('PADDING', (0, 0), (-1, -1), 6),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('LINEBELOW', (0, 0), (-1, -1), 0.5, colors.HexColor("#e2e8f0")),
+                ('BOX', (0, 0), (-1, -1), 1, colors.HexColor("#cbd5e1")),
+            ]))
+            story.append(findings_table)
+            story.append(Spacer(1, 15))
+            
+        elif submission.validation_errors:
             story.append(Paragraph("Detected Issues & Warnings", subtitle_style))
             story.append(Spacer(1, 5))
             
