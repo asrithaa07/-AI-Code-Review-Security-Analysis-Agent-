@@ -168,7 +168,7 @@ export function CodeSubmissionForm({ onSubmissionComplete }: CodeSubmissionFormP
                 <Textarea
                   id="source-code"
                   placeholder="Paste your source code here..."
-                  className="min-h-[380px] font-mono text-sm bg-transparent border-0 resize-y focus-visible:ring-0 focus-visible:ring-offset-0 focus:outline-none focus:border-0"
+                  className="w-full min-h-[380px] font-mono text-sm bg-transparent border-0 resize-y focus-visible:ring-0 focus-visible:ring-offset-0 focus:outline-none focus:border-0"
                   value={sourceCode}
                   onChange={(e) => setSourceCode(e.target.value)}
                 />
