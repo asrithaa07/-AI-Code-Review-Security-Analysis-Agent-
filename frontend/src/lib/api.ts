@@ -10,7 +10,7 @@ export interface ValidationError {
 
 export interface Finding {
   id: string;
-  agent_source: "code_analysis" | "security_vulnerability";
+  agent_source: "code_analysis" | "security_vulnerability" | "syntax_validator" | string;
   category: string;
   severity: "critical" | "high" | "medium" | "low" | "info";
   title: string;
@@ -83,12 +83,14 @@ function getHeaders(extraHeaders: Record<string, string> = {}): Record<string, s
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: "Request failed" }));
-    throw new Error(error.detail || `HTTP ${response.status}`);
+    const err = new Error(error.detail || `HTTP ${response.status}`) as Error & { status?: number };
+    err.status = response.status;
+    throw err;
   }
   return response.json();
 }
 
-export async function loginUser(data: any): Promise<AuthResponse> {
+export async function loginUser(data: Record<string, unknown>): Promise<AuthResponse> {
   const response = await fetch(`${API_URL}/api/v1/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -97,7 +99,7 @@ export async function loginUser(data: any): Promise<AuthResponse> {
   return handleResponse<AuthResponse>(response);
 }
 
-export async function signupUser(data: any): Promise<AuthResponse> {
+export async function signupUser(data: Record<string, unknown>): Promise<AuthResponse> {
   const response = await fetch(`${API_URL}/api/v1/auth/signup`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -115,7 +117,7 @@ export async function getMe(): Promise<User> {
 
 export async function submitPaste(data: {
   source_code: string;
-  language: Language;
+  language?: Language;
   filename?: string;
 }): Promise<Submission> {
   const response = await fetch(`${API_URL}/api/v1/submissions/paste`, {

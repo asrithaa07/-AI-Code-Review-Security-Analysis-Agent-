@@ -9,7 +9,7 @@ class CodeAnalysisFinding(BaseModel):
     title: str = Field(description="Short title summarizing the code quality issue")
     description: str = Field(description="Detailed explanation of the issue and why it is a problem")
     line_number: Optional[int] = Field(description="The 1-based line number where the issue starts, or null if it is global")
-    severity: str = Field(description="Severity: low, medium, high, or critical")
+    severity: str = Field(description="Severity: info, low, medium, high, or critical")
     category: str = Field(description="Category: complexity, code_smell, anti_pattern, or poor_practice")
 
 class CodeAnalysisResult(BaseModel):
@@ -21,6 +21,9 @@ You are an expert Code Quality and Design Analysis Agent. Your task is to analyz
 2. Complexity issues: High cyclomatic complexity, deeply nested conditions, or overly convoluted logic.
 3. Design Anti-patterns: Tight coupling, global state abuse, violation of SOLID principles, or poor encapsulation.
 4. Poor Coding Practices: Empty exception handlers, missing docstrings, violating standard naming conventions, or resource leaks.
+
+CONTEXT-AWARE DOCUMENTATION RULES:
+Do NOT recommend documentation (missing docstrings or comments) for short code snippets, competitive programming template scripts, algorithmic solutions (e.g. single-function interview problems like Two Sum, Solution classes, etc.), or files under 50 lines. Only recommend documentation when analyzing production code, multi-function utility modules, APIs, backend services, or classes with multiple public methods where documentation adds real value.
 
 For each issue found, classify it with:
 - Title: A concise name of the issue.
@@ -61,10 +64,32 @@ def get_mock_code_analysis(source_code: str, language: str) -> List[dict]:
             }
         ]
     else:
+        # Context-aware check for short snippets or competitive programming templates
+        lines = [l.strip() for l in source_code.split("\n") if l.strip()]
+        total_lines = len(lines)
+        
+        # Check if the code resembles a competitive programming solution or small snippet
+        is_small_snippet = total_lines < 50
+        
+        # Simple count of functions and classes
+        num_methods = 0
+        num_classes = 0
+        for line in lines:
+            if line.startswith("def ") or line.startswith("class ") or line.startswith("public ") or "void " in line or "class Solution" in line:
+                if "class " in line:
+                    num_classes += 1
+                else:
+                    num_methods += 1
+        
+        # If it is a short snippet, single class, or has <= 1 methods, do NOT recommend documentation
+        if is_small_snippet or (num_classes <= 1 and num_methods <= 1):
+            return []
+            
+        # For larger or production-like code, recommend component documentation
         return [
             {
                 "title": "Missing Component Documentation",
-                "description": "The source file lacks file-level or method-level documentation. Add appropriate docstrings/comments describing inputs, outputs, and behaviors.",
+                "description": "The source file lacks file-level or method-level documentation. Add appropriate docstrings/comments describing inputs, outputs, and behaviors to improve code readability and maintainability.",
                 "line_number": 1,
                 "severity": "info",
                 "category": "poor_practice"

@@ -26,6 +26,8 @@ class ValidationErrorDetail(BaseModel):
     line: int | None = None
     column: int | None = None
     message: str
+    severity: str | None = None
+    category: str | None = None
 
 
 class FindingDetail(BaseModel):
@@ -42,7 +44,7 @@ class FindingDetail(BaseModel):
 
 class PasteSubmissionRequest(BaseModel):
     source_code: str = Field(..., min_length=1, max_length=500_000)
-    language: LanguageEnum
+    language: LanguageEnum | None = None
     filename: str | None = Field(default=None, max_length=255)
 
     @field_validator("source_code")

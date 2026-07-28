@@ -1,3 +1,4 @@
+import html
 import io
 from datetime import datetime
 from reportlab.lib.pagesizes import letter
@@ -73,23 +74,23 @@ class ReportGenerator:
         metadata_data = [
             [
                 Paragraph("<b>Submission ID:</b>", body_style),
-                Paragraph(str(submission.id), body_style)
+                Paragraph(html.escape(str(submission.id)), body_style)
             ],
             [
                 Paragraph("<b>Language:</b>", body_style),
-                Paragraph(submission.language.value.upper(), body_style)
+                Paragraph(html.escape(submission.language.value.upper()), body_style)
             ],
             [
                 Paragraph("<b>Type:</b>", body_style),
-                Paragraph(submission.submission_type.value.upper(), body_style)
+                Paragraph(html.escape(submission.submission_type.value.upper()), body_style)
             ],
             [
                 Paragraph("<b>Filename:</b>", body_style),
-                Paragraph(submission.filename or "N/A", body_style)
+                Paragraph(html.escape(submission.filename or "N/A"), body_style)
             ],
             [
                 Paragraph("<b>Timestamp:</b>", body_style),
-                Paragraph(created_str, body_style)
+                Paragraph(html.escape(created_str), body_style)
             ]
         ]
 
@@ -105,11 +106,11 @@ class ReportGenerator:
         story.append(meta_table)
         story.append(Spacer(1, 15))
 
-        # Status Banner
-        status_bg = "#ecfdf5" if submission.is_valid_syntax else "#fef2f2"
-        status_border = "#10b981" if submission.is_valid_syntax else "#ef4444"
-        status_text_color = "#065f46" if submission.is_valid_syntax else "#991b1b"
-        status_msg = "<b>SYNTAX VERIFIED: SUCCESS</b>" if submission.is_valid_syntax else "<b>SYNTAX VERIFIED: ERRORS DETECTED</b>"
+        has_issues = (submission.severity_scores or {}).get("critical", 0) > 0 or (submission.severity_scores or {}).get("high", 0) > 0 or not submission.is_valid_syntax
+        status_bg = "#fef2f2" if has_issues else "#ecfdf5"
+        status_border = "#ef4444" if has_issues else "#10b981"
+        status_text_color = "#991b1b" if has_issues else "#065f46"
+        status_msg = "<b>CODE REVIEW: ISSUES & VULNERABILITIES DETECTED</b>" if has_issues else "<b>CODE REVIEW: ALL CHECKS PASSED (SECURE)</b>"
 
         status_para_style = ParagraphStyle(
             name="StatusPara",
@@ -191,14 +192,14 @@ class ReportGenerator:
                 else:
                     sev_color = "#64748b"
                 
-                title = f.get('title', 'Finding')
-                desc = f.get('description', '')
-                category = f.get('category', '').replace('_', ' ').title()
+                title = html.escape(f.get('title', 'Finding'))
+                desc = html.escape(f.get('description', ''))
+                category = html.escape(f.get('category', '').replace('_', ' ').title())
                 
                 cwe = f.get('cwe_id')
                 owasp = f.get('owasp_category')
-                meta_info = f" | {cwe}" if cwe else ""
-                meta_info += f" | {owasp}" if owasp else ""
+                meta_info = f" | {html.escape(cwe)}" if cwe else ""
+                meta_info += f" | {html.escape(owasp)}" if owasp else ""
                 
                 detail_html = f"<b>{title}</b> ({category}{meta_info})<br/><font color='#475569'>{desc}</font>"
                 
@@ -233,7 +234,7 @@ class ReportGenerator:
                 line_str = str(err.get("line")) if err.get("line") is not None else "N/A"
                 issues_data.append([
                     Paragraph(line_str, body_style),
-                    Paragraph(err.get("message", "Unknown error"), body_style)
+                    Paragraph(html.escape(err.get("message", "Unknown error")), body_style)
                 ])
                 
             issues_table = Table(issues_data, colWidths=[50, 490])
@@ -264,7 +265,7 @@ class ReportGenerator:
 
         # Add line numbers to the code listing
         lines = submission.source_code.splitlines()
-        numbered_code = "\n".join(f"{i+1:3d} | {line}" for i, line in enumerate(lines))
+        numbered_code = "\n".join(f"{i+1:3d} | {html.escape(line)}" for i, line in enumerate(lines))
 
         code_data = [[Preformatted(numbered_code, code_style)]]
         code_table = Table(code_data, colWidths=[540])

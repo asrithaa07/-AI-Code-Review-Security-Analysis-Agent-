@@ -3,7 +3,6 @@
 import React, { useEffect, useState } from "react";
 import { getMySubmissions, Submission } from "@/lib/api";
 import { 
-  FileCode2, 
   Terminal, 
   CheckCircle2, 
   AlertTriangle, 
@@ -44,12 +43,6 @@ export function Dashboard({ onSelectSubmission, refreshTrigger }: DashboardProps
   useEffect(() => {
     fetchHistory();
   }, [refreshTrigger]);
-
-  // Compute stats locally from submissions list
-  const pythonCount = submissions.filter(s => s.language === "python").length;
-  const javaCount = submissions.filter(s => s.language === "java").length;
-  const passCount = submissions.filter(s => s.is_valid_syntax).length;
-  const passRate = submissions.length > 0 ? Math.round((passCount / submissions.length) * 100) : 0;
   
   const securityIssuesCount = submissions.reduce((acc, curr) => {
     return acc + (curr.findings?.filter(f => f.agent_source === "security_vulnerability").length || 0);
@@ -60,7 +53,7 @@ export function Dashboard({ onSelectSubmission, refreshTrigger }: DashboardProps
   }, 0);
 
   const severeCount = submissions.reduce((acc, curr) => {
-    return acc + (curr.findings?.filter(f => f.severity === "critical" || f.severity === "high").length || 0);
+    return acc + (curr.findings?.filter(f => (f.severity || "").toLowerCase() === "critical" || (f.severity || "").toLowerCase() === "high").length || 0);
   }, 0);
 
   return (
@@ -173,7 +166,6 @@ export function Dashboard({ onSelectSubmission, refreshTrigger }: DashboardProps
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/40">
                   {submissions.map((sub) => {
-                    const hasIssues = sub.validation_errors && sub.validation_errors.length > 0;
                     return (
                       <tr key={sub.id} className="hover:bg-slate-50/40 dark:hover:bg-slate-900/20 transition-colors text-sm">
                         <td className="py-4 px-6 font-mono text-xs text-slate-500 dark:text-slate-400">

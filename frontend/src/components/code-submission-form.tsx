@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useRef, useState, useEffect } from "react";
-import { AlertCircle, CheckCircle2, Loader2, Upload, Sparkles, AlertTriangle, FileCode, FileDown, ShieldAlert, Info, XCircle } from "lucide-react";
+import { useRef, useState, useEffect } from "react";
+import { AlertCircle, CheckCircle2, Loader2, Upload, Sparkles, FileCode, FileDown, ShieldAlert, Info } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -9,13 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Language, Submission, Finding, submitPaste, submitUpload, getSubmissionDetails } from "@/lib/api";
@@ -41,13 +34,22 @@ const SAMPLE_JAVA = `public class AuthService {
 `;
 
 export function CodeSubmissionForm({ onSubmissionComplete }: CodeSubmissionFormProps) {
-  const [language, setLanguage] = useState<Language>("python");
   const [sourceCode, setSourceCode] = useState("");
   const [filename, setFilename] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Client-side quick auto-detection for visual preview
+  const autoDetectedLanguage: Language = (() => {
+    if (filename.toLowerCase().endsWith(".py")) return "python";
+    if (filename.toLowerCase().endsWith(".java")) return "java";
+    const code = sourceCode.toLowerCase();
+    const javaScore = (code.match(/public class|system\.out|public static void|import java\.|void |string\[\]/g) || []).length;
+    const pyScore = (code.match(/def |import |from |elif |self\.|print\(/g) || []).length;
+    return javaScore > pyScore ? "java" : "python";
+  })();
 
   const handlePasteSubmit = async () => {
     if (!sourceCode.trim()) {
@@ -59,7 +61,6 @@ export function CodeSubmissionForm({ onSubmissionComplete }: CodeSubmissionFormP
     try {
       const submission = await submitPaste({
         source_code: sourceCode,
-        language,
         filename: filename || undefined,
       });
       onSubmissionComplete(submission);
@@ -104,10 +105,6 @@ export function CodeSubmissionForm({ onSubmissionComplete }: CodeSubmissionFormP
     }
   };
 
-  const loadSample = useCallback(() => {
-    setSourceCode(language === "python" ? SAMPLE_PYTHON : SAMPLE_JAVA);
-  }, [language]);
-
   return (
     <Card className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-xl rounded-2xl overflow-hidden backdrop-blur-sm">
       <CardHeader className="space-y-3 p-6 border-b border-slate-100 dark:border-slate-800/60">
@@ -118,7 +115,7 @@ export function CodeSubmissionForm({ onSubmissionComplete }: CodeSubmissionFormP
           <div>
             <CardTitle className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">Submit Code for Review</CardTitle>
             <CardDescription className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              Choose language, paste source code or drag &amp; drop a file to run syntax check.
+              Paste source code or drag &amp; drop a file — the agent auto-detects Python vs Java code structure.
             </CardDescription>
           </div>
         </div>
@@ -131,24 +128,21 @@ export function CodeSubmissionForm({ onSubmissionComplete }: CodeSubmissionFormP
           </TabsList>
 
           <TabsContent value="paste" className="mt-6 space-y-6">
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2 items-center">
               <div className="space-y-2">
-                <Label htmlFor="language" className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Language</Label>
-                <Select value={language} onValueChange={(v) => setLanguage(v as Language)}>
-                  <SelectTrigger id="language" className="rounded-xl border-slate-200 dark:border-slate-800 bg-transparent py-5">
-                    <SelectValue placeholder="Select language" />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-xl dark:bg-slate-900 dark:border-slate-800">
-                    <SelectItem value="python">Python</SelectItem>
-                    <SelectItem value="java">Java</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Target Language</Label>
+                <div className="flex items-center gap-2 p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
+                  <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 font-semibold px-3 py-1 text-xs">
+                    {autoDetectedLanguage === "python" ? "🐍 Auto-Detected: Python" : "☕ Auto-Detected: Java"}
+                  </Badge>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">Agent auto-understands code</span>
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="filename" className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Filename (optional)</Label>
                 <Input
                   id="filename"
-                  placeholder={language === "python" ? "example.py" : "Example.java"}
+                  placeholder={autoDetectedLanguage === "python" ? "example.py" : "Example.java"}
                   value={filename}
                   onChange={(e) => setFilename(e.target.value)}
                   className="rounded-xl border-slate-200 dark:border-slate-800 bg-transparent py-5 focus-visible:ring-blue-500"
@@ -157,20 +151,27 @@ export function CodeSubmissionForm({ onSubmissionComplete }: CodeSubmissionFormP
             </div>
 
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <Label htmlFor="source-code" className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Source Code</Label>
-                <Button variant="ghost" size="sm" onClick={loadSample} type="button" className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40">
-                  <Sparkles className="mr-1 h-3.5 w-3.5" />
-                  Load Sample Code
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => setSourceCode(SAMPLE_PYTHON)} type="button" className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40">
+                    <Sparkles className="mr-1 h-3.5 w-3.5" />
+                    Load Sample Python
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setSourceCode(SAMPLE_JAVA)} type="button" className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40">
+                    <Sparkles className="mr-1 h-3.5 w-3.5" />
+                    Load Sample Java
+                  </Button>
+                </div>
               </div>
-              <div className="relative rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-1">
+              <div className="w-full relative rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-1">
                 <Textarea
                   id="source-code"
-                  placeholder="Paste your source code here..."
+                  placeholder="Paste your Python or Java source code here..."
                   className="w-full min-h-[380px] font-mono text-sm bg-transparent border-0 resize-y focus-visible:ring-0 focus-visible:ring-offset-0 focus:outline-none focus:border-0"
                   value={sourceCode}
                   onChange={(e) => setSourceCode(e.target.value)}
+                  spellCheck="false"
                 />
               </div>
             </div>
@@ -183,7 +184,7 @@ export function CodeSubmissionForm({ onSubmissionComplete }: CodeSubmissionFormP
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Validating...
+                  Validating &amp; Detecting Language...
                 </>
               ) : (
                 "Submit Code Analysis"
@@ -278,7 +279,6 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
   const [selectedFindingId, setSelectedFindingId] = useState<string | null>(null);
   const [severityFilter, setSeverityFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all"); // all, security, quality
-  const [isPolling, setIsPolling] = useState(false);
 
   // Sync state if initialSubmission changes from parent
   useEffect(() => {
@@ -289,13 +289,11 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
   // Polling logic for status pending/analyzing
   useEffect(() => {
     if (submission.status === "pending" || submission.status === "analyzing") {
-      setIsPolling(true);
       const interval = setInterval(async () => {
         try {
           const updated = await getSubmissionDetails(submission.id);
           setSubmission(updated);
           if (updated.status === "completed" || updated.status === "failed") {
-            setIsPolling(false);
             clearInterval(interval);
           }
         } catch (e) {
@@ -303,8 +301,6 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
         }
       }, 2000);
       return () => clearInterval(interval);
-    } else {
-      setIsPolling(false);
     }
   }, [submission.id, submission.status]);
 
@@ -354,6 +350,7 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
   const filteredFindings = findings.filter(f => {
     const matchesSeverity = severityFilter === "all" || f.severity.toLowerCase() === severityFilter.toLowerCase();
     const matchesType = typeFilter === "all" ||
+      (typeFilter === "syntax" && (f.agent_source === "syntax_validator" || f.category === "syntax_error")) ||
       (typeFilter === "security" && f.agent_source === "security_vulnerability") ||
       (typeFilter === "quality" && f.agent_source === "code_analysis");
     return matchesSeverity && matchesType;
@@ -373,19 +370,41 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
   });
 
   const getSeverityBadge = (sev: string) => {
-    const s = sev.toLowerCase();
+    const s = (sev || "info").toLowerCase();
     switch (s) {
       case "critical":
-        return <Badge className="bg-red-600 hover:bg-red-700 text-white font-semibold">Critical</Badge>;
+        return <Badge className="bg-red-600 hover:bg-red-700 text-white font-bold uppercase tracking-wider text-[10px] px-2 py-0.5 shadow-sm">Critical</Badge>;
       case "high":
-        return <Badge className="bg-orange-500 hover:bg-orange-600 text-white font-semibold">High</Badge>;
+        return <Badge className="bg-orange-500 hover:bg-orange-600 text-white font-bold uppercase tracking-wider text-[10px] px-2 py-0.5 shadow-sm">High</Badge>;
       case "medium":
-        return <Badge className="bg-amber-500 hover:bg-amber-600 text-white font-semibold">Medium</Badge>;
+        return <Badge className="bg-amber-500 hover:bg-amber-600 text-white font-bold uppercase tracking-wider text-[10px] px-2 py-0.5 shadow-sm">Medium</Badge>;
       case "low":
-        return <Badge className="bg-blue-500 hover:bg-blue-600 text-white font-semibold">Low</Badge>;
+        return <Badge className="bg-blue-500 hover:bg-blue-600 text-white font-bold uppercase tracking-wider text-[10px] px-2 py-0.5 shadow-sm">Low</Badge>;
       default:
-        return <Badge className="bg-slate-500 hover:bg-slate-600 text-white font-semibold">Info</Badge>;
+        return <Badge className="bg-slate-500 hover:bg-slate-600 text-white font-bold uppercase tracking-wider text-[10px] px-2 py-0.5 shadow-sm">Info</Badge>;
     }
+  };
+
+  const getCategoryFlag = (f: Finding) => {
+    if (f.agent_source === "syntax_validator" || f.category === "syntax_error") {
+      return (
+        <Badge variant="outline" className="border-red-300 text-red-700 dark:border-red-800 dark:text-red-400 font-semibold text-[10px] bg-red-50 dark:bg-red-950/40">
+          🚫 Syntax Error
+        </Badge>
+      );
+    }
+    if (f.agent_source === "security_vulnerability") {
+      return (
+        <Badge variant="outline" className="border-purple-300 text-purple-700 dark:border-purple-800 dark:text-purple-400 font-semibold text-[10px] bg-purple-50 dark:bg-purple-950/40">
+          🛡️ Security ({f.category.replace(/_/g, " ")})
+        </Badge>
+      );
+    }
+    return (
+      <Badge variant="outline" className="border-amber-300 text-amber-700 dark:border-amber-800 dark:text-amber-400 font-semibold text-[10px] bg-amber-50 dark:bg-amber-950/40">
+        ⚙️ Quality ({f.category.replace(/_/g, " ")})
+      </Badge>
+    );
   };
 
   const getLineHighlightClass = (lineNumber: number) => {
@@ -422,6 +441,9 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
 
   const scores = submission.severity_scores || { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
   const totalFindings = findings.length;
+  const hasSevereIssues = findings.some(f => 
+    ["critical", "high", "medium"].includes(f.severity.toLowerCase())
+  );
 
   return (
     <div className="space-y-6">
@@ -453,12 +475,17 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
               {totalFindings === 0 ? (
                 <Badge className="bg-emerald-500 text-white font-semibold rounded-lg px-2.5 py-1.5 gap-1">
                   <CheckCircle2 className="h-4 w-4" />
-                  Code Clean
+                  Code Clean (0 issues)
                 </Badge>
-              ) : (
+              ) : hasSevereIssues ? (
                 <Badge className="bg-red-500 text-white font-semibold rounded-lg px-2.5 py-1.5 gap-1">
                   <ShieldAlert className="h-4 w-4" />
                   {totalFindings} Issues Flagged
+                </Badge>
+              ) : (
+                <Badge className="bg-blue-500 text-white font-semibold rounded-lg px-2.5 py-1.5 gap-1">
+                  <Info className="h-4 w-4" />
+                  {totalFindings} Best Practice Recommendation{totalFindings > 1 ? "s" : ""}
                 </Badge>
               )}
             </div>
@@ -493,115 +520,139 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
 
       {/* Two-Column Explorer Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
-        {/* Left column: Findings List */}
-        <Card className="lg:col-span-2 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-xl rounded-2xl overflow-hidden h-[680px] flex flex-col">
-          <CardHeader className="p-4 border-b border-slate-100 dark:border-slate-800/60 space-y-3 flex-shrink-0">
-            {/* Filter Tabs */}
-            <div className="flex bg-slate-100 dark:bg-slate-950 p-1 rounded-lg text-xs font-semibold">
-              <button
-                onClick={() => setTypeFilter("all")}
-                className={`flex-1 py-1.5 rounded-md transition-all ${typeFilter === "all" ? "bg-white dark:bg-slate-900 shadow text-blue-600 dark:text-blue-400" : "text-slate-500"}`}
-              >
-                All ({findings.length})
-              </button>
-              <button
-                onClick={() => setTypeFilter("security")}
-                className={`flex-1 py-1.5 rounded-md transition-all ${typeFilter === "security" ? "bg-white dark:bg-slate-900 shadow text-red-600 dark:text-red-400" : "text-slate-500"}`}
-              >
-                Security ({findings.filter(f => f.agent_source === "security_vulnerability").length})
-              </button>
-              <button
-                onClick={() => setTypeFilter("quality")}
-                className={`flex-1 py-1.5 rounded-md transition-all ${typeFilter === "quality" ? "bg-white dark:bg-slate-900 shadow text-amber-600 dark:text-amber-500" : "text-slate-500"}`}
-              >
-                Quality ({findings.filter(f => f.agent_source === "code_analysis").length})
-              </button>
+        {/* Left column: Findings List or Clean Status */}
+        {totalFindings === 0 ? (
+          <Card className="lg:col-span-2 border border-emerald-100 dark:border-emerald-950/40 bg-emerald-50/5 dark:bg-emerald-950/5 shadow-lg rounded-2xl p-8 flex flex-col items-center justify-center text-center h-[680px] gap-5">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/30 shadow-md">
+              <CheckCircle2 className="h-8 w-8" />
             </div>
-
-            {/* Severity filter row */}
-            <div className="flex flex-wrap gap-1.5">
-              <Button
-                variant={severityFilter === "all" ? "default" : "outline"}
-                size="xs"
-                onClick={() => setSeverityFilter("all")}
-                className="text-[10px] font-bold h-6 rounded-md"
-              >
-                All
-              </Button>
-              <Button
-                variant={severityFilter === "critical" ? "destructive" : "outline"}
-                size="xs"
-                onClick={() => setSeverityFilter("critical")}
-                className="text-[10px] font-bold h-6 rounded-md"
-              >
-                Critical
-              </Button>
-              <Button
-                variant={severityFilter === "high" ? "destructive" : "outline"}
-                size="xs"
-                onClick={() => setSeverityFilter("high")}
-                className="text-[10px] font-bold h-6 rounded-md"
-              >
-                High
-              </Button>
-              <Button
-                variant={severityFilter === "medium" ? "default" : "outline"}
-                size="xs"
-                onClick={() => setSeverityFilter("medium")}
-                className="text-[10px] font-bold h-6 rounded-md"
-              >
-                Medium
-              </Button>
-              <Button
-                variant={severityFilter === "low" ? "default" : "outline"}
-                size="xs"
-                onClick={() => setSeverityFilter("low")}
-                className="text-[10px] font-bold h-6 rounded-md"
-              >
-                Low
-              </Button>
-              <Button
-                variant={severityFilter === "info" ? "default" : "outline"}
-                size="xs"
-                onClick={() => setSeverityFilter("info")}
-                className="text-[10px] font-bold h-6 rounded-md"
-              >
-                Info
-              </Button>
+            <div className="space-y-3">
+              <h4 className="text-lg font-bold text-slate-900 dark:text-white">No issues detected</h4>
+              <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed max-w-xs">
+                No issues detected. Your code passed all syntax, security, and quality checks.
+              </p>
             </div>
-          </CardHeader>
-          <CardContent className="p-0 overflow-y-auto flex-1 divide-y divide-slate-100 dark:divide-slate-800/40">
-            {filteredFindings.length === 0 ? (
-              <div className="p-8 text-center text-slate-500 text-sm">
-                No matching findings discovered.
-              </div>
-            ) : (
-              filteredFindings.map((f) => (
+          </Card>
+        ) : (
+          <Card className="lg:col-span-2 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-xl rounded-2xl overflow-hidden h-[680px] flex flex-col">
+            <CardHeader className="p-4 border-b border-slate-100 dark:border-slate-800/60 space-y-3 flex-shrink-0">
+              {/* Filter Tabs */}
+              <div className="flex bg-slate-100 dark:bg-slate-950 p-1 rounded-lg text-[11px] font-semibold">
                 <button
-                  key={f.id}
-                  onClick={() => setSelectedFindingId(f.id)}
-                  className={`w-full text-left p-4 hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-all flex flex-col gap-1.5 ${
-                    selectedFindingId === f.id ? "bg-blue-50/30 dark:bg-blue-950/25 border-r-2 border-blue-500" : ""
-                  }`}
+                  onClick={() => setTypeFilter("all")}
+                  className={`flex-1 py-1.5 rounded-md transition-all ${typeFilter === "all" ? "bg-white dark:bg-slate-900 shadow text-blue-600 dark:text-blue-400" : "text-slate-500"}`}
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] font-mono text-slate-500 font-semibold">
-                      {f.line_number != null ? `Line ${f.line_number}` : "Global Issue"}
-                    </span>
-                    {getSeverityBadge(f.severity)}
-                  </div>
-                  <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 line-clamp-1">{f.title}</h4>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">{f.description}</p>
+                  All ({findings.length})
                 </button>
-              ))
-            )}
-          </CardContent>
-        </Card>
+                <button
+                  onClick={() => setTypeFilter("syntax")}
+                  className={`flex-1 py-1.5 rounded-md transition-all ${typeFilter === "syntax" ? "bg-white dark:bg-slate-900 shadow text-red-600 dark:text-red-400" : "text-slate-500"}`}
+                >
+                  Syntax ({findings.filter(f => f.agent_source === "syntax_validator" || f.category === "syntax_error").length})
+                </button>
+                <button
+                  onClick={() => setTypeFilter("security")}
+                  className={`flex-1 py-1.5 rounded-md transition-all ${typeFilter === "security" ? "bg-white dark:bg-slate-900 shadow text-purple-600 dark:text-purple-400" : "text-slate-500"}`}
+                >
+                  Security ({findings.filter(f => f.agent_source === "security_vulnerability").length})
+                </button>
+                <button
+                  onClick={() => setTypeFilter("quality")}
+                  className={`flex-1 py-1.5 rounded-md transition-all ${typeFilter === "quality" ? "bg-white dark:bg-slate-900 shadow text-amber-600 dark:text-amber-500" : "text-slate-500"}`}
+                >
+                  Quality ({findings.filter(f => f.agent_source === "code_analysis").length})
+                </button>
+              </div>
+
+              {/* Severity filter row */}
+              <div className="flex flex-wrap gap-1.5">
+                <Button
+                  variant={severityFilter === "all" ? "default" : "outline"}
+                  size="xs"
+                  onClick={() => setSeverityFilter("all")}
+                  className="text-[10px] font-bold h-6 rounded-md"
+                >
+                  All
+                </Button>
+                <Button
+                  variant={severityFilter === "critical" ? "destructive" : "outline"}
+                  size="xs"
+                  onClick={() => setSeverityFilter("critical")}
+                  className="text-[10px] font-bold h-6 rounded-md"
+                >
+                  Critical
+                </Button>
+                <Button
+                  variant={severityFilter === "high" ? "destructive" : "outline"}
+                  size="xs"
+                  onClick={() => setSeverityFilter("high")}
+                  className="text-[10px] font-bold h-6 rounded-md"
+                >
+                  High
+                </Button>
+                <Button
+                  variant={severityFilter === "medium" ? "default" : "outline"}
+                  size="xs"
+                  onClick={() => setSeverityFilter("medium")}
+                  className="text-[10px] font-bold h-6 rounded-md"
+                >
+                  Medium
+                </Button>
+                <Button
+                  variant={severityFilter === "low" ? "default" : "outline"}
+                  size="xs"
+                  onClick={() => setSeverityFilter("low")}
+                  className="text-[10px] font-bold h-6 rounded-md"
+                >
+                  Low
+                </Button>
+                <Button
+                  variant={severityFilter === "info" ? "default" : "outline"}
+                  size="xs"
+                  onClick={() => setSeverityFilter("info")}
+                  className="text-[10px] font-bold h-6 rounded-md"
+                >
+                  Info
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0 overflow-y-auto flex-1 divide-y divide-slate-100 dark:divide-slate-800/40">
+              {filteredFindings.length === 0 ? (
+                <div className="p-8 text-center text-slate-500 text-sm">
+                  No matching findings discovered.
+                </div>
+              ) : (
+                filteredFindings.map((f) => (
+                  <button
+                    key={f.id}
+                    onClick={() => setSelectedFindingId(f.id)}
+                    className={`w-full text-left p-4 hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-all flex flex-col gap-2 ${
+                      selectedFindingId === f.id ? "bg-blue-50/30 dark:bg-blue-950/25 border-r-2 border-blue-500" : ""
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="text-[11px] font-mono text-slate-500 font-semibold">
+                        {f.line_number != null ? `Line ${f.line_number}` : "Global Issue"}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        {getCategoryFlag(f)}
+                        {getSeverityBadge(f.severity)}
+                      </div>
+                    </div>
+                    <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 line-clamp-1">{f.title}</h4>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">{f.description}</p>
+                  </button>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        )}
  
         {/* Right column: Interactive Code Viewer */}
         <Card className="lg:col-span-3 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-xl rounded-2xl overflow-hidden h-[680px] flex flex-col">
-          <CardHeader className="p-4 border-b border-slate-100 dark:border-slate-800/60 flex-shrink-0">
+          <CardHeader className="p-4 border-b border-slate-100 dark:border-slate-800/60 flex-shrink-0 flex items-center justify-between">
             <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-400">Interactive Source Code Explorer</CardTitle>
+            <span className="text-[11px] text-slate-500">Click highlighted lines to inspect findings</span>
           </CardHeader>
           <CardContent className="p-0 flex-1 overflow-auto bg-slate-950 text-slate-300">
             <pre className="font-mono text-xs leading-relaxed py-4 select-none">
@@ -611,6 +662,9 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
                 const lineFindings = findingsByLine[lineNum] || [];
                 const hasLineFindings = lineFindings.length > 0;
 
+                // Determine badge text for line
+                const topFinding = lineFindings[0];
+
                 return (
                   <div
                     key={idx}
@@ -619,7 +673,7 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
                         setSelectedFindingId(lineFindings[0].id);
                       }
                     }}
-                    className={`flex items-start px-4 transition-all duration-150 ${highlightClass} ${
+                    className={`flex items-center px-4 transition-all duration-150 ${highlightClass} ${
                       hasLineFindings ? "cursor-pointer hover:bg-slate-900/50" : ""
                     }`}
                   >
@@ -629,9 +683,9 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
                     <span className="flex-1 whitespace-pre font-mono text-[11px] select-text">
                       {line || " "}
                     </span>
-                    {hasLineFindings && (
-                      <span className="ml-2 h-4 w-4 rounded-full flex items-center justify-center bg-red-500/20 text-red-500 text-[10px] font-extrabold shadow-sm animate-pulse">
-                        !
+                    {hasLineFindings && topFinding && (
+                      <span className="ml-2 flex items-center gap-1">
+                        {getSeverityBadge(topFinding.severity)}
                       </span>
                     )}
                   </div>
@@ -647,18 +701,16 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
         <Card className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-xl rounded-2xl overflow-hidden backdrop-blur-sm animate-in fade-in slide-in-from-bottom-4 duration-300">
           <CardHeader className="p-6 border-b border-slate-100 dark:border-slate-800/60 bg-slate-50/50 dark:bg-slate-950/20 flex flex-col sm:flex-row justify-between gap-4">
             <div className="space-y-1.5">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 {getSeverityBadge(selectedFinding.severity)}
-                <Badge variant="outline" className="font-semibold text-slate-500 dark:text-slate-400 capitalize">
-                  {selectedFinding.agent_source === "security_vulnerability" ? "🛡️ Security Vulnerability" : "⚙️ Code Quality Smell"}
-                </Badge>
+                {getCategoryFlag(selectedFinding)}
                 {selectedFinding.cwe_id && (
-                  <Badge variant="secondary" className="font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800">
+                  <Badge variant="secondary" className="font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 text-[10px]">
                     {selectedFinding.cwe_id}
                   </Badge>
                 )}
                 {selectedFinding.owasp_category && (
-                  <Badge variant="secondary" className="font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800">
+                  <Badge variant="secondary" className="font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 text-[10px]">
                     {selectedFinding.owasp_category}
                   </Badge>
                 )}
@@ -672,10 +724,9 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
           <CardContent className="p-6 space-y-4">
             <div>
               <Label className="text-xs uppercase font-bold text-slate-400 tracking-wider">Analysis Findings & Impact</Label>
-              <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed mt-1">{selectedFinding.description}</p>
+              <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed mt-1 whitespace-pre-wrap">{selectedFinding.description}</p>
             </div>
-            {/* Standard Category */}
-            <div className="grid grid-cols-2 gap-4 pt-3 border-t border-slate-100 dark:border-slate-800/60">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-3 border-t border-slate-100 dark:border-slate-800/60">
               <div>
                 <Label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Category Identifier</Label>
                 <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mt-0.5 capitalize">
@@ -683,9 +734,15 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
                 </p>
               </div>
               <div>
-                <Label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Detector Agent</Label>
+                <Label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Detector Source</Label>
                 <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mt-0.5 capitalize">
                   {selectedFinding.agent_source.replace(/_/g, " ")}
+                </p>
+              </div>
+              <div>
+                <Label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Flagged Severity</Label>
+                <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mt-0.5 capitalize">
+                  {selectedFinding.severity.toUpperCase()}
                 </p>
               </div>
             </div>

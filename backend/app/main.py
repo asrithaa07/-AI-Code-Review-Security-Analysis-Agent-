@@ -11,8 +11,9 @@ from app.database import Base, engine
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if settings.database_url.startswith("sqlite"):
-        db_path = settings.database_url.replace("sqlite:///", "")
+    db_url = settings.sync_database_url
+    if db_url.startswith("sqlite"):
+        db_path = db_url.replace("sqlite:///", "")
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
     Base.metadata.create_all(bind=engine)
     yield

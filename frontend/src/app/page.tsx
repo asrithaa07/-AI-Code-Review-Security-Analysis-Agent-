@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Shield, Code2, Sparkles, Terminal, LayoutDashboard, LogIn, LogOut, User } from "lucide-react";
+import { Shield, Sparkles, Terminal, LayoutDashboard, LogIn, LogOut } from "lucide-react";
 
 import { CodeSubmissionForm, SubmissionResult } from "@/components/code-submission-form";
 import { KnowledgeBasePanel } from "@/components/knowledge-base-panel";
@@ -90,14 +90,6 @@ export default function Home() {
               Secure Knowledge Base
             </button>
             
-            <a
-              href="http://localhost:8000/docs"
-              target="_blank"
-              rel="noreferrer"
-              className="text-sm font-semibold text-slate-600 hover:text-blue-600 dark:text-slate-300 dark:hover:text-blue-400 transition-colors"
-            >
-              API Reference
-            </a>
           </nav>
 
           <div className="flex items-center gap-4">

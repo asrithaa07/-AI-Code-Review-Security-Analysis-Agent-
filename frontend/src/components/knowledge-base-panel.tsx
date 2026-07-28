@@ -68,6 +68,20 @@ export function KnowledgeBasePanel() {
     }
   };
 
+  const handleCardClick = async (docTitle: string) => {
+    setQuery(docTitle);
+    setIsSearching(true);
+    setError(null);
+    try {
+      const data = await queryKnowledgeBase(docTitle);
+      setResults(data.results);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Search failed");
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
   return (
     <Card className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-xl rounded-2xl overflow-hidden backdrop-blur-sm">
       <CardHeader className="p-6 border-b border-slate-100 dark:border-slate-800/60 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -127,23 +141,30 @@ export function KnowledgeBasePanel() {
         {/* Documents Grid */}
         {status?.documents && status.documents.length > 0 && (
           <div className="space-y-4">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Grounded Standards &amp; Materials</h4>
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Grounded Standards &amp; Materials</h4>
+              <span className="text-xs text-blue-600 dark:text-blue-400 font-semibold">Click any card to auto-search</span>
+            </div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {status.documents.map((doc) => (
-                <div
+                <button
                   key={doc.source_file}
-                  className="flex items-center gap-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/20 p-4 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md hover:border-blue-200 dark:hover:border-blue-900/50"
+                  type="button"
+                  onClick={() => handleCardClick(doc.title)}
+                  disabled={isSearching || !status?.is_indexed}
+                  className="w-full text-left flex items-center gap-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/20 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-blue-500 dark:hover:border-blue-500 cursor-pointer active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-blue-500/50 group disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400 shrink-0">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400 group-hover:bg-blue-600 group-hover:text-white transition-colors shrink-0">
                     <BookOpen className="h-4.5 w-4.5" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-slate-900 dark:text-white leading-snug">{doc.title}</p>
+                    <p className="truncate text-sm font-semibold text-slate-900 dark:text-white leading-snug group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{doc.title}</p>
                     <p className="text-xs text-slate-500 mt-0.5 font-medium">
                       {doc.category.toUpperCase()} &middot; {doc.chunk_count} chunks
                     </p>
                   </div>
-                </div>
+                  <Search className="h-4 w-4 text-slate-400 group-hover:text-blue-500 transition-colors shrink-0" />
+                </button>
               ))}
             </div>
           </div>

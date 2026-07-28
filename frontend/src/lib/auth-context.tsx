@@ -28,12 +28,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
           const profile = await getMe();
           setUser(profile);
-        } catch (error) {
+        } catch (error: unknown) {
           console.error("Failed to load user profile:", error);
-          // Token is invalid/expired
-          localStorage.removeItem("spotlight_token");
-          setToken(null);
-          setUser(null);
+          const err = error as { status?: number; message?: string };
+          // Only clear stored token if the backend explicitly returned a 401 Unauthorized response
+          if (err?.status === 401 || err?.message?.includes("401") || err?.message?.includes("Unauthorized")) {
+            localStorage.removeItem("spotlight_token");
+            setToken(null);
+            setUser(null);
+          }
         }
       }
       setLoading(false);

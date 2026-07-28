@@ -93,18 +93,29 @@ workflow.add_edge("merge", END)
 
 orchestrator_app = workflow.compile()
 
-async def run_agent_analysis_pipeline(submission_id: uuid.UUID):
+async def run_agent_analysis_pipeline(submission_id: uuid.UUID) -> None:
     db = SessionLocal()
     try:
-        # Fetch the submission
         submission = db.query(CodeSubmission).filter(CodeSubmission.id == submission_id).first()
         if not submission:
             return
-            
-        # Update status to analyzing
-        submission.status = SubmissionStatus.analyzing
-        db.commit()
-        
+
+        # Prepare syntax error findings if present
+        syntax_findings = []
+        if submission.validation_errors:
+            for err in submission.validation_errors:
+                syntax_findings.append({
+                    "id": str(uuid.uuid4()),
+                    "agent_source": "syntax_validator",
+                    "category": "syntax_error",
+                    "severity": err.get("severity", "critical"),
+                    "title": f"Syntax Error: {err.get('message', 'Syntax parsing failed')[:60]}",
+                    "description": err.get("message", "Syntax parsing failed"),
+                    "line_number": err.get("line"),
+                    "cwe_id": None,
+                    "owasp_category": None
+                })
+
         # Prepare graph state
         initial_state = {
             "submission_id": str(submission.id),
@@ -123,17 +134,24 @@ async def run_agent_analysis_pipeline(submission_id: uuid.UUID):
         submission = db.query(CodeSubmission).filter(CodeSubmission.id == submission_id).first()
         
         errors = result_state.get("errors") or []
-        if errors:
+        if errors and not syntax_findings and not result_state.get("merged_findings"):
             submission.status = SubmissionStatus.failed
             existing_errors = submission.validation_errors or []
             for err in errors:
                 existing_errors.append({"line": None, "column": None, "message": err})
             submission.validation_errors = existing_errors
         else:
-            findings = result_state.get("merged_findings") or []
-            submission.findings = findings
+            merged = syntax_findings + (result_state.get("merged_findings") or [])
             
-            # Compute severity statistics
+            # Sort merged findings by line number (placing global / None line numbers at the end)
+            def get_sort_key(item):
+                ln = item.get("line_number")
+                return (0, int(ln)) if ln is not None else (1, 0)
+                
+            merged.sort(key=get_sort_key)
+            submission.findings = merged
+            
+            # Compute severity statistics across all flagged issues
             severity_counts = {
                 "critical": 0,
                 "high": 0,
@@ -141,7 +159,7 @@ async def run_agent_analysis_pipeline(submission_id: uuid.UUID):
                 "low": 0,
                 "info": 0
             }
-            for finding in findings:
+            for finding in merged:
                 severity = str(finding.get("severity", "info")).lower()
                 if severity in severity_counts:
                     severity_counts[severity] += 1
