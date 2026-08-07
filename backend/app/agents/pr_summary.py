@@ -1,6 +1,6 @@
 import os
 import json
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import google.generativeai as genai
 from pydantic import BaseModel, Field
 
@@ -25,6 +25,8 @@ class PRSummaryResult(BaseModel):
     health_score: int = Field(description="Overall code health score from 0 (very insecure) to 100 (clean)")
     owasp_mapping: List[OWASPMappingItem] = Field(description="Mapping of findings to OWASP Top 10 categories")
     prioritized_fix_list: List[PrioritizedFixItem] = Field(description="Prioritized roadmap of fixes to apply")
+    full_remediated_code: Optional[str] = Field(default=None, description="Full complete refactored production-ready code file")
+
 
 
 SYSTEM_PROMPT = """

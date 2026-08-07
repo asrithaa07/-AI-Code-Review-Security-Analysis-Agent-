@@ -29,7 +29,8 @@ class ReportGenerator:
             name="TitleStyle",
             parent=styles["Normal"],
             fontName="Helvetica-Bold",
-            fontSize=22,
+            fontSize=20,
+            leading=24,
             textColor=colors.HexColor("#1e293b"),
             spaceAfter=15,
             alignment=TA_LEFT
@@ -238,7 +239,28 @@ class ReportGenerator:
                 story.append(f_table)
                 story.append(Spacer(1, 10))
 
-        # Code Listing
+        # Fully Remediated Source Code (Ready to Use)
+        full_code = (submission.pr_summary or {}).get("full_remediated_code")
+        if full_code:
+            story.append(Spacer(1, 10))
+            story.append(Paragraph("Fully Remediated & Refactored Source Code (Production Ready)", subtitle_style))
+            story.append(Spacer(1, 5))
+
+            rem_lines = full_code.splitlines()
+            numbered_rem_code = "\n".join(f"{i+1:3d} | {html.escape(line)}" for i, line in enumerate(rem_lines))
+            rem_code_data = [[Preformatted(numbered_rem_code, code_style)]]
+            rem_code_table = Table(rem_code_data, colWidths=[540])
+            rem_code_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#022c22")),
+                ('PADDING', (0, 0), (-1, -1), 12),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('BOX', (0, 0), (-1, -1), 1, colors.HexColor("#065f46")),
+            ]))
+            story.append(rem_code_table)
+
+        # Submitted Code Listing
+        story.append(Spacer(1, 10))
         story.append(Paragraph("Submitted Code Listing", subtitle_style))
         story.append(Spacer(1, 5))
 
@@ -315,6 +337,12 @@ class ReportGenerator:
                 if f.get('best_practice_explanation'):
                     md.append(f"> **Best Practice:** {f.get('best_practice_explanation')}\n")
 
+        full_code = (submission.pr_summary or {}).get("full_remediated_code")
+        if full_code:
+            code_lang = submission.language.value if submission.language else 'text'
+            md.append("## Fully Remediated & Refactored Source Code (Production Ready)\n")
+            md.append(f"```{code_lang}\n{full_code}\n```\n")
+
         md.append("## Submitted Source Code\n")
         code_lang = submission.language.value if submission.language else 'text'
         md.append(f"```{code_lang}\n{submission.source_code}\n```")
@@ -332,6 +360,7 @@ class ReportGenerator:
             "severity_scores": submission.severity_scores or {},
             "pr_summary": submission.pr_summary or {},
             "findings": submission.findings or [],
+            "full_remediated_code": (submission.pr_summary or {}).get("full_remediated_code"),
             "source_code": submission.source_code
         }
 

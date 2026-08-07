@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from langgraph.graph import START, END, StateGraph
 from app.agents.code_analysis import analyze_code_quality
 from app.agents.security_vulnerability import scan_security_vulnerabilities
-from app.agents.remediation import generate_remediations
+from app.agents.remediation import generate_remediations, generate_full_remediated_code
 from app.agents.pr_summary import generate_pr_summary, calculate_health_score
 from app.models.submission import CodeSubmission, SubmissionStatus
 from app.database import SessionLocal
@@ -18,6 +18,13 @@ class AgentState(TypedDict):
     source_code: str
     language: str
     code_findings: List[dict]
+    security_findings: List[dict]
+    merged_findings: List[dict]
+    remediated_findings: List[dict]
+    pr_summary: dict
+    health_score: int
+    errors: Annotated[List[str], operator.add]
+
     security_findings: List[dict]
     merged_findings: List[dict]
     remediated_findings: List[dict]
@@ -121,6 +128,15 @@ async def pr_summary_node(state: AgentState) -> Dict:
             findings,
             severity_counts
         )
+        if not summary.get("full_remediated_code"):
+            full_code = await asyncio.to_thread(
+                generate_full_remediated_code,
+                state["source_code"],
+                state["language"],
+                findings
+            )
+            summary["full_remediated_code"] = full_code
+
         h_score = summary.get("health_score", calculate_health_score(severity_counts))
         return {"pr_summary": summary, "health_score": h_score}
     except Exception as e:

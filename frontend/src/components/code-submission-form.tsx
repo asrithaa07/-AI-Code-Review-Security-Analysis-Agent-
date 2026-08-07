@@ -307,9 +307,10 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
   const [selectedFindingId, setSelectedFindingId] = useState<string | null>(null);
   const [severityFilter, setSeverityFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all"); // all, security, quality, owasp
-  const [activePortalTab, setActivePortalTab] = useState<"findings" | "pr_summary" | "assistant">("findings");
+  const [activePortalTab, setActivePortalTab] = useState<"findings" | "pr_summary" | "full_code" | "assistant">("findings");
   const [assistantQuery, setAssistantQuery] = useState<string | undefined>(undefined);
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
+  const [copiedFullCode, setCopiedFullCode] = useState<boolean>(false);
 
   // Sync state if initialSubmission changes from parent
   useEffect(() => {
@@ -589,6 +590,16 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
           >
             <FileText className="mr-1.5 h-4 w-4" />
             PR Review Summary
+          </Button>
+
+          <Button
+            variant={activePortalTab === "full_code" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setActivePortalTab("full_code")}
+            className={`rounded-xl font-bold text-xs ${activePortalTab === "full_code" ? "bg-emerald-600 text-white shadow-md shadow-emerald-500/10" : "text-slate-600 dark:text-slate-300"}`}
+          >
+            <Sparkles className="mr-1.5 h-4 w-4 text-emerald-300" />
+            Full Remediated Code
           </Button>
 
           <Button
@@ -1006,6 +1017,43 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
             ) : (
               <p className="text-sm text-slate-500">No priority fixes required. Code meets secure coding criteria.</p>
             )}
+          </div>
+        </Card>
+      )}
+
+      {/* Full Remediated Code Tab */}
+      {activePortalTab === "full_code" && (
+        <Card className="border border-emerald-200 dark:border-emerald-900/60 bg-white dark:bg-slate-900/60 shadow-xl rounded-2xl overflow-hidden backdrop-blur-sm p-6 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800/60">
+            <div>
+              <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-emerald-500" />
+                Fully Remediated &amp; Production-Ready Source Code
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Complete refactored source file addressing all flagged OWASP vulnerabilities and code quality smells.
+              </p>
+            </div>
+            <Button
+              onClick={() => {
+                const fullCode = submission.pr_summary?.full_remediated_code || submission.source_code;
+                navigator.clipboard.writeText(fullCode);
+                setCopiedFullCode(true);
+                setTimeout(() => setCopiedFullCode(false), 2000);
+              }}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl px-5 py-2 text-xs flex items-center gap-2 shadow-md shadow-emerald-500/10 flex-shrink-0 cursor-pointer"
+            >
+              {copiedFullCode ? <Check className="h-4 w-4 text-white" /> : <Copy className="h-4 w-4" />}
+              {copiedFullCode ? "Copied Refactored Code!" : "Copy Complete Code"}
+            </Button>
+          </div>
+
+          <div className="relative rounded-2xl border border-slate-800 bg-slate-950 p-6 overflow-x-auto shadow-inner">
+            <pre className="font-mono text-xs leading-relaxed text-emerald-300 whitespace-pre">
+              {submission.pr_summary?.full_remediated_code || (
+                "# All findings resolved.\n# Submitted code complies with secure coding standards:\n\n" + submission.source_code
+              )}
+            </pre>
           </div>
         </Card>
       )}

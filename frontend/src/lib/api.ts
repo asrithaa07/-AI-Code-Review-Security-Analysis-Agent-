@@ -38,6 +38,7 @@ export interface PRSummary {
     issue_title: string;
     action_item: string;
   }>;
+  full_remediated_code?: string | null;
 }
 
 export interface Submission {
