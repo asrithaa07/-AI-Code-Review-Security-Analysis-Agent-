@@ -137,3 +137,33 @@ def get_submission_pdf(submission_id: UUID, db: Session = Depends(get_db)):
             "Content-Disposition": f'attachment; filename="{base_name}_report.pdf"'
         }
     )
+
+
+@router.get("/{submission_id}/markdown")
+def get_submission_markdown(submission_id: UUID, db: Session = Depends(get_db)):
+    submission = submission_service.get_submission(db, submission_id)
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    
+    md_content = report_generator.generate_submission_markdown(submission)
+    filename = submission.filename or f"report_{submission.id}"
+    base_name = filename.rsplit(".", 1)[0]
+    
+    return Response(
+        content=md_content,
+        media_type="text/markdown",
+        headers={
+            "Content-Disposition": f'attachment; filename="{base_name}_report.md"'
+        }
+    )
+
+
+@router.get("/{submission_id}/json")
+def get_submission_json(submission_id: UUID, db: Session = Depends(get_db)):
+    submission = submission_service.get_submission(db, submission_id)
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    
+    json_data = report_generator.generate_submission_json(submission)
+    return json_data
+

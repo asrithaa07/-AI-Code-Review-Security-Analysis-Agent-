@@ -42,6 +42,8 @@ class CodeSubmission(Base):
     validation_errors: Mapped[list | None] = mapped_column(JSON, nullable=True)
     findings: Mapped[list | None] = mapped_column(JSON, nullable=True)
     severity_scores: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    health_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    pr_summary: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     status: Mapped[SubmissionStatus] = mapped_column(
         Enum(SubmissionStatus), default=SubmissionStatus.pending
     )

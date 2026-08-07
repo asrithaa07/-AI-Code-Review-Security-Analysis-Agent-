@@ -55,8 +55,9 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
         
         {/* Close Button */}
         <button 
+          type="button"
           onClick={onClose}
-          className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
         >
           <X className="h-5 w-5" />
         </button>
@@ -77,8 +78,9 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
         {/* Tab Selector */}
         <div className="flex border-b border-slate-100 dark:border-slate-800/60 p-1.5 bg-slate-50 dark:bg-slate-950/40">
           <button
+            type="button"
             onClick={() => { setTab("login"); setError(null); }}
-            className={`flex-1 py-2 text-sm font-semibold rounded-xl transition-all ${
+            className={`flex-1 py-2 text-sm font-semibold rounded-xl transition-all cursor-pointer ${
               tab === "login"
                 ? "bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm"
                 : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
@@ -87,8 +89,9 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
             Log In
           </button>
           <button
+            type="button"
             onClick={() => { setTab("signup"); setError(null); }}
-            className={`flex-1 py-2 text-sm font-semibold rounded-xl transition-all ${
+            className={`flex-1 py-2 text-sm font-semibold rounded-xl transition-all cursor-pointer ${
               tab === "signup"
                 ? "bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm"
                 : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
@@ -141,7 +144,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
           <Button
             type="submit"
             disabled={isSubmitting}
-            className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold py-5 rounded-xl shadow-lg shadow-blue-500/10 transition-all mt-6"
+            className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold py-5 rounded-xl shadow-lg shadow-blue-500/10 transition-all mt-6 cursor-pointer"
           >
             {isSubmitting ? (
               <>

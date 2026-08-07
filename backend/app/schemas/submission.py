@@ -40,6 +40,18 @@ class FindingDetail(BaseModel):
     line_number: int | None = None
     cwe_id: str | None = None
     owasp_category: str | None = None
+    remediation_summary: str | None = None
+    corrected_code: str | None = None
+    best_practice_explanation: str | None = None
+
+
+class PRSummaryDetail(BaseModel):
+    title: str
+    executive_overview: str
+    health_score: int
+    severity_breakdown: dict[str, int]
+    owasp_mapping: list[dict[str, str]]
+    prioritized_fix_list: list[dict[str, str]]
 
 
 class PasteSubmissionRequest(BaseModel):
@@ -66,6 +78,8 @@ class SubmissionResponse(BaseModel):
     validation_errors: list[ValidationErrorDetail] | None
     findings: list[FindingDetail] | None = None
     severity_scores: dict[str, int] | None = None
+    health_score: int | None = None
+    pr_summary: dict | None = None
     status: SubmissionStatusEnum
     created_at: datetime
     updated_at: datetime
@@ -101,3 +115,15 @@ class RetrievedChunk(BaseModel):
 class KnowledgeBaseQueryResponse(BaseModel):
     query: str
     results: list[RetrievedChunk]
+
+
+class ConversationalChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=2000)
+    submission_id: UUID | None = None
+    chat_history: list[dict[str, str]] | None = None
+
+
+class ConversationalChatResponse(BaseModel):
+    reply: str
+    rag_sources: list[RetrievedChunk] | None = None
+

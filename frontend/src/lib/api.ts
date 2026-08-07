@@ -18,6 +18,26 @@ export interface Finding {
   line_number: number | null;
   cwe_id: string | null;
   owasp_category: string | null;
+  remediation_summary?: string | null;
+  corrected_code?: string | null;
+  best_practice_explanation?: string | null;
+}
+
+export interface PRSummary {
+  title: string;
+  executive_overview: string;
+  health_score: number;
+  severity_breakdown: Record<string, number>;
+  owasp_mapping: Array<{
+    category: string;
+    finding_title: string;
+    risk_level: string;
+  }>;
+  prioritized_fix_list: Array<{
+    priority: number;
+    issue_title: string;
+    action_item: string;
+  }>;
 }
 
 export interface Submission {
@@ -30,6 +50,8 @@ export interface Submission {
   validation_errors: ValidationError[] | null;
   findings: Finding[] | null;
   severity_scores: Record<string, number> | null;
+  health_score: number | null;
+  pr_summary: PRSummary | null;
   status: "pending" | "analyzing" | "completed" | "failed";
   created_at: string;
   updated_at: string;
@@ -181,3 +203,21 @@ export async function checkHealth(): Promise<{ status: string }> {
   const response = await fetch(`${API_URL}/health`);
   return handleResponse(response);
 }
+
+export async function sendAssistantQuery(
+  message: string,
+  submissionId?: string,
+  chatHistory?: Array<{ role: string; content: string }>
+): Promise<{ reply: string; rag_sources?: RetrievedChunk[] }> {
+  const response = await fetch(`${API_URL}/api/v1/assistant/chat`, {
+    method: "POST",
+    headers: getHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({
+      message,
+      submission_id: submissionId || undefined,
+      chat_history: chatHistory || undefined,
+    }),
+  });
+  return handleResponse<{ reply: string; rag_sources?: RetrievedChunk[] }>(response);
+}
+
