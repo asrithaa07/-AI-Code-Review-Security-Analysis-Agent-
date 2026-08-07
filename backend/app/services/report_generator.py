@@ -27,12 +27,11 @@ class ReportGenerator:
         # Define modern styles
         title_style = ParagraphStyle(
             name="TitleStyle",
-            parent=styles["Normal"],
             fontName="Helvetica-Bold",
-            fontSize=20,
-            leading=24,
+            fontSize=16,
+            leading=20,
             textColor=colors.HexColor("#1e293b"),
-            spaceAfter=15,
+            spaceAfter=12,
             alignment=TA_LEFT
         )
         
