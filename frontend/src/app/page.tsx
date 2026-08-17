@@ -1,23 +1,33 @@
 "use client";
 
 import { useState } from "react";
-import { Shield, Sparkles, Terminal, LayoutDashboard, LogIn, LogOut } from "lucide-react";
+import { Shield, Sparkles, Terminal, LayoutDashboard, LogIn, LogOut, BookOpen } from "lucide-react";
 
 import { CodeSubmissionForm, SubmissionResult } from "@/components/code-submission-form";
-import { KnowledgeBasePanel } from "@/components/knowledge-base-panel";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Submission } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { AuthModal } from "@/components/auth-modal";
 import { Dashboard } from "@/components/dashboard";
+import { KnowledgeBaseView } from "@/components/knowledge-base-view";
 
 export default function Home() {
   const { user, logout } = useAuth();
   const [latestSubmission, setLatestSubmission] = useState<Submission | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [currentView, setCurrentView] = useState<"console" | "dashboard">("console");
+  const [currentView, setCurrentView] = useState<"console" | "dashboard" | "knowledge">("console");
   const [dashboardRefresh, setDashboardRefresh] = useState(0);
+  const [pendingViewAfterAuth, setPendingViewAfterAuth] = useState<"console" | "dashboard" | "knowledge" | null>(null);
+
+  const handleDashboardClick = () => {
+    if (user) {
+      setCurrentView("dashboard");
+    } else {
+      setPendingViewAfterAuth("dashboard");
+      setIsAuthModalOpen(true);
+    }
+  };
 
   const scrollToSection = (id: string) => {
     const el = document.getElementById(id);
@@ -52,8 +62,8 @@ export default function Home() {
               <Shield className="h-5 w-5" />
             </div>
             <div>
-              <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">Spotlight AI</h1>
-              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Secure Code Analysis Hub</p>
+              <h1 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">Smart Code Inspection Platform</h1>
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Vulnerability Detection System — Group 2</p>
             </div>
           </div>
 
@@ -61,24 +71,19 @@ export default function Home() {
             <button
               type="button"
               onClick={() => { setCurrentView("console"); setTimeout(() => scrollToSection("analysis-portal"), 50); }}
-              className={`text-sm font-semibold transition-colors cursor-pointer ${
+              className={`text-sm font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
                 currentView === "console" 
                   ? "text-blue-600 dark:text-blue-400" 
                   : "text-slate-600 hover:text-blue-600 dark:text-slate-300 dark:hover:text-blue-400"
               }`}
             >
-              Analysis Console
+              <Terminal className="h-4 w-4" />
+              Security Scanner
             </button>
-            
+
             <button
               type="button"
-              onClick={() => {
-                if (user) {
-                  setCurrentView("dashboard");
-                } else {
-                  setIsAuthModalOpen(true);
-                }
-              }}
+              onClick={handleDashboardClick}
               className={`text-sm font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
                 currentView === "dashboard" 
                   ? "text-blue-600 dark:text-blue-400" 
@@ -91,10 +96,15 @@ export default function Home() {
 
             <button
               type="button"
-              onClick={() => { setCurrentView("console"); setTimeout(() => scrollToSection("knowledge-base"), 50); }}
-              className="text-sm font-semibold text-slate-600 hover:text-blue-600 dark:text-slate-300 dark:hover:text-blue-400 transition-colors cursor-pointer"
+              onClick={() => setCurrentView("knowledge")}
+              className={`text-sm font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                currentView === "knowledge" 
+                  ? "text-blue-600 dark:text-blue-400" 
+                  : "text-slate-600 hover:text-blue-600 dark:text-slate-300 dark:hover:text-blue-400"
+              }`}
             >
-              Secure Knowledge Base
+              <BookOpen className="h-4 w-4" />
+              Knowledge Base
             </button>
           </nav>
 
@@ -132,35 +142,29 @@ export default function Home() {
         </div>
 
         {/* Mobile Navigation Sub-Bar */}
-        <div className="flex md:hidden items-center justify-around py-2.5 px-4 bg-slate-100/80 dark:bg-slate-900/80 border-t border-slate-200/60 dark:border-slate-800/60 text-xs font-semibold">
+        <div className="flex md:hidden items-center justify-around py-2.5 px-4 bg-slate-100/80 dark:bg-slate-900/80 border-t border-slate-200/60 dark:border-slate-800/60 text-xs font-semibold overflow-x-auto gap-2">
           <button
             type="button"
             onClick={() => { setCurrentView("console"); setTimeout(() => scrollToSection("analysis-portal"), 50); }}
-            className={`py-1 px-3 rounded-lg cursor-pointer ${currentView === "console" ? "bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm" : "text-slate-600 dark:text-slate-400"}`}
+            className={`py-1 px-3 rounded-lg cursor-pointer whitespace-nowrap ${currentView === "console" ? "bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm" : "text-slate-600 dark:text-slate-400"}`}
           >
-            Console
+            Scanner
           </button>
 
           <button
             type="button"
-            onClick={() => {
-              if (user) {
-                setCurrentView("dashboard");
-              } else {
-                setIsAuthModalOpen(true);
-              }
-            }}
-            className={`py-1 px-3 rounded-lg cursor-pointer ${currentView === "dashboard" ? "bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm" : "text-slate-600 dark:text-slate-400"}`}
+            onClick={handleDashboardClick}
+            className={`py-1 px-3 rounded-lg cursor-pointer whitespace-nowrap ${currentView === "dashboard" ? "bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm" : "text-slate-600 dark:text-slate-400"}`}
           >
             Dashboard
           </button>
 
           <button
             type="button"
-            onClick={() => { setCurrentView("console"); setTimeout(() => scrollToSection("knowledge-base"), 50); }}
-            className="py-1 px-3 rounded-lg cursor-pointer text-slate-600 dark:text-slate-400"
+            onClick={() => setCurrentView("knowledge")}
+            className={`py-1 px-3 rounded-lg cursor-pointer whitespace-nowrap ${currentView === "knowledge" ? "bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm" : "text-slate-600 dark:text-slate-400"}`}
           >
-            Knowledge Base
+            Knowledge
           </button>
         </div>
       </header>
@@ -171,30 +175,23 @@ export default function Home() {
         <div className="mx-auto max-w-7xl px-6 relative z-10 text-center space-y-6">
           <div className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-semibold bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border border-blue-100 dark:border-blue-900/50">
             <Sparkles className="h-3.5 w-3.5" />
-            RAG-Powered Security Analysis
+            Development of Smart Code Inspection Platform (Group 2)
           </div>
           <h2 className="mx-auto max-w-4xl text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-slate-900 dark:text-white leading-[1.1]">
-            Next-Gen Automated Code Quality &amp;{" "}
+            Automated Code Quality &amp;{" "}
             <span className="bg-gradient-to-r from-blue-600 to-indigo-500 bg-clip-text text-transparent">
-              Security Reviews
+              Security Intelligence
             </span>
           </h2>
           <p className="mx-auto max-w-2xl text-base sm:text-lg text-slate-600 dark:text-slate-400 font-normal leading-relaxed">
-            Instantly validate Python and Java source code against secure coding guidelines, OWASP Top 10 vulnerabilities, and standard code smell patterns.
+            Validate Python and Java source code against secure coding guidelines, OWASP Top 10 vulnerabilities, and standard code smell patterns with interactive side-by-side remediation.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-4 pt-2">
             <Button
               onClick={() => { setCurrentView("console"); setTimeout(() => scrollToSection("analysis-portal"), 50); }}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-lg shadow-blue-500/20 px-8 py-6 rounded-xl transition-all hover:scale-[1.02]"
+              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-lg shadow-blue-500/20 px-8 py-6 rounded-xl transition-all hover:scale-[1.02] cursor-pointer"
             >
-              Analyze Code
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => { setCurrentView("console"); setTimeout(() => scrollToSection("knowledge-base"), 50); }}
-              className="border-slate-300 dark:border-slate-700 font-semibold px-8 py-6 rounded-xl transition-all hover:scale-[1.02] bg-transparent"
-            >
-              Search Guidelines
+              Start Security Scan
             </Button>
           </div>
         </div>
@@ -203,43 +200,40 @@ export default function Home() {
       {/* Main Content Area */}
       <main className="mx-auto max-w-7xl px-6 py-12 space-y-16">
         
-        {currentView === "console" ? (
-          <>
-            {/* Code Analysis Section */}
-            <section id="analysis-portal" className="space-y-8 scroll-mt-24">
-              <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400">
-                  <Terminal className="h-4 w-4" />
-                </div>
-                <div>
-                  <h3 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Analysis Console</h3>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">Submit code snippets or upload files for syntax validation</p>
-                </div>
+        {currentView === "console" && (
+          <section id="analysis-portal" className="space-y-8 scroll-mt-24">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400">
+                <Terminal className="h-4 w-4" />
               </div>
-
-              <div className="space-y-10">
-                <CodeSubmissionForm onSubmissionComplete={handleSubmissionComplete} />
-
-                {latestSubmission && (
-                  <div id="results-section" className="scroll-mt-24 animate-in fade-in slide-in-from-bottom-6 duration-500">
-                    <SubmissionResult submission={latestSubmission} />
-                  </div>
-                )}
+              <div>
+                <h3 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Analysis Console</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400">Submit code snippets or upload files for syntax validation</p>
               </div>
-            </section>
+            </div>
 
-            {/* Knowledge Base Section */}
-            <section id="knowledge-base" className="scroll-mt-24">
-              <KnowledgeBasePanel />
-            </section>
-          </>
-        ) : (
+            <div className="space-y-10">
+              <CodeSubmissionForm onSubmissionComplete={handleSubmissionComplete} />
+
+              {latestSubmission && (
+                <div id="results-section" className="scroll-mt-24 animate-in fade-in slide-in-from-bottom-6 duration-500">
+                  <SubmissionResult submission={latestSubmission} />
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {currentView === "dashboard" && (
           <Dashboard 
             onSelectSubmission={handleSelectHistorySubmission} 
             refreshTrigger={dashboardRefresh} 
           />
         )}
 
+        {currentView === "knowledge" && (
+          <KnowledgeBaseView />
+        )}
       </main>
 
       {/* Footer */}
@@ -247,19 +241,31 @@ export default function Home() {
         <div className="mx-auto max-w-7xl px-6 space-y-4">
           <div className="flex items-center justify-center gap-2">
             <Shield className="h-5 w-5 text-blue-600" />
-            <span className="font-bold text-slate-900 dark:text-white">Spotlight AI</span>
+            <span className="font-bold text-slate-900 dark:text-white">Smart Code Inspection Platform (Group 2)</span>
           </div>
           <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto">
             High-performance code scanner integrated with a secure-coding RAG pipeline for FastAPI + LangGraph.
           </p>
           <div className="pt-4 text-xs text-slate-400 dark:text-slate-600 font-medium">
-            &copy; {new Date().getFullYear()} Spotlight AI. All rights reserved.
+            &copy; {new Date().getFullYear()} Smart Code Inspection Platform Group 2. All rights reserved.
           </div>
         </div>
       </footer>
 
       {/* Modals */}
-      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+      <AuthModal 
+        isOpen={isAuthModalOpen} 
+        onClose={() => {
+          setIsAuthModalOpen(false);
+          setPendingViewAfterAuth(null);
+        }}
+        onSuccess={() => {
+          if (pendingViewAfterAuth) {
+            setCurrentView(pendingViewAfterAuth);
+            setPendingViewAfterAuth(null);
+          }
+        }}
+      />
     </div>
   );
 }

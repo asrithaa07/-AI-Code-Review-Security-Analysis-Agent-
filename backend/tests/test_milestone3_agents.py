@@ -70,6 +70,7 @@ def test_pr_summary_agent(sample_findings):
 
 def test_conversational_assistant():
     """Test Conversational Assistant RAG query response."""
+    # 1. SQL Injection query
     res = generate_assistant_response(
         user_message="How do I prevent SQL Injection in Python?",
         submission_context=None
@@ -77,6 +78,32 @@ def test_conversational_assistant():
     assert "reply" in res
     assert len(res["reply"]) > 0
     assert "sql" in res["reply"].lower() or "parameter" in res["reply"].lower()
+
+    # 2. Command Injection query
+    res_cmd = generate_assistant_response(
+        user_message="How do I prevent command injection in subprocess?",
+        submission_context=None
+    )
+    assert "command injection" in res_cmd["reply"].lower() or "cwe-78" in res_cmd["reply"].lower()
+    assert "subprocess" in res_cmd["reply"].lower()
+    # Ensure command injection is not hijacked by SQL injection block
+    assert "sql injection" not in res_cmd["reply"].lower()[:200]
+
+    # 3. Cross-Site Scripting query
+    res_xss = generate_assistant_response(
+        user_message="Tell me about XSS prevention.",
+        submission_context=None
+    )
+    assert "cross-site scripting" in res_xss["reply"].lower() or "xss" in res_xss["reply"].lower()
+
+    # 4. Unknown/Dynamic query using retrieved ChromaDB context
+    res_dyn = generate_assistant_response(
+        user_message="owasp guide rules",
+        submission_context=None
+    )
+    assert "owasp" in res_dyn["reply"].lower()
+    assert "rag_sources" in res_dyn
+    assert len(res_dyn["rag_sources"]) > 0
 
 @pytest.mark.asyncio
 async def test_full_orchestrator_pipeline_milestone3():
@@ -145,7 +172,7 @@ def test_report_generator_exports(sample_findings):
 
     md_str = report_generator.generate_submission_markdown(mock_sub)
     assert isinstance(md_str, str)
-    assert "# Spotlight AI" in md_str
+    assert "Development of Smart Code Inspection Platform" in md_str
     assert "OWASP Standard Vulnerability Mapping" in md_str
 
     json_dict = report_generator.generate_submission_json(mock_sub)

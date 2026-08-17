@@ -10,9 +10,10 @@ import { Label } from "@/components/ui/label";
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSuccess?: () => void;
 }
 
-export function AuthModal({ isOpen, onClose }: AuthModalProps) {
+export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
   const { login, signup } = useAuth();
   const [tab, setTab] = useState<"login" | "signup">("login");
   const [username, setUsername] = useState("");
@@ -41,6 +42,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
       } else {
         await signup(username, password);
       }
+      if (onSuccess) onSuccess();
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Authentication failed");

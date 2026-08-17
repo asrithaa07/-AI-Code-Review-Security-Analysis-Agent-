@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { MessageSquare, Send, Bot, User, Sparkles, BookOpen, ChevronRight, Loader2, ShieldCheck } from "lucide-react";
+import { MessageSquare, Send, Bot, User, Sparkles, Loader2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,84 @@ interface ChatMessage {
 interface ConversationalAssistantProps {
   submissionId?: string;
   initialFindingQuery?: string;
+}
+
+function renderFormattedText(text: string) {
+  // Split message by code blocks or lines
+  const lines = text.split("\n");
+  const elements: React.ReactNode[] = [];
+  let inCodeBlock = false;
+  let codeBuffer: string[] = [];
+
+  lines.forEach((line, index) => {
+    if (line.trim().startsWith("```")) {
+      if (inCodeBlock) {
+        // End code block
+        elements.push(
+          <pre key={`code-${index}`} className="my-2 p-3 bg-slate-900 text-slate-100 rounded-lg text-xs font-mono overflow-x-auto border border-slate-800">
+            <code>{codeBuffer.join("\n")}</code>
+          </pre>
+        );
+        codeBuffer = [];
+        inCodeBlock = false;
+      } else {
+        inCodeBlock = true;
+      }
+      return;
+    }
+
+    if (inCodeBlock) {
+      codeBuffer.push(line);
+      return;
+    }
+
+    const trimmed = line.trim();
+    if (!trimmed) {
+      elements.push(<div key={`sp-${index}`} className="h-1.5" />);
+      return;
+    }
+
+    // Process Headings (### or ####)
+    if (trimmed.startsWith("#### ") || trimmed.startsWith("### ") || trimmed.startsWith("## ") || trimmed.startsWith("# ")) {
+      const headingText = trimmed.replace(/^#+\s*/, "");
+      elements.push(
+        <h4 key={`h-${index}`} className="font-bold text-sm text-blue-700 dark:text-blue-400 mt-2 mb-1 flex items-center gap-1.5">
+          {headingText}
+        </h4>
+      );
+      return;
+    }
+
+    // Process Bullet Items or Numbered lists
+    const isBullet = trimmed.startsWith("- ") || trimmed.startsWith("* ");
+    const isNumbered = /^\d+\.\s/.test(trimmed);
+    const cleanLine = isBullet ? trimmed.replace(/^[-*]\s*/, "") : trimmed;
+
+    // Process inline bold (**bold**)
+    const parts = cleanLine.split(/(\*\*[^*]+\*\*)/g);
+    const inlineNodes = parts.map((part, pIdx) => {
+      if (part.startsWith("**") && part.endsWith("**")) {
+        return <strong key={pIdx} className="font-semibold text-slate-900 dark:text-white">{part.slice(2, -2)}</strong>;
+      }
+      return part;
+    });
+
+    elements.push(
+      <p key={`p-${index}`} className={`text-xs sm:text-sm ${isBullet || isNumbered ? "pl-3 border-l-2 border-blue-500/40 my-1" : "my-0.5"}`}>
+        {inlineNodes}
+      </p>
+    );
+  });
+
+  if (inCodeBlock && codeBuffer.length > 0) {
+    elements.push(
+      <pre key="code-end" className="my-2 p-3 bg-slate-900 text-slate-100 rounded-lg text-xs font-mono overflow-x-auto border border-slate-800">
+        <code>{codeBuffer.join("\n")}</code>
+      </pre>
+    );
+  }
+
+  return <div className="space-y-1">{elements}</div>;
 }
 
 export function ConversationalAssistant({ submissionId, initialFindingQuery }: ConversationalAssistantProps) {
@@ -46,6 +124,7 @@ export function ConversationalAssistant({ submissionId, initialFindingQuery }: C
     if (initialFindingQuery) {
       handleSend(initialFindingQuery);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialFindingQuery]);
 
   const handleSend = async (queryText?: string) => {
@@ -142,25 +221,12 @@ export function ConversationalAssistant({ submissionId, initialFindingQuery }: C
                     : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 rounded-bl-none"
                 }`}
               >
-                <p className="whitespace-pre-wrap">{msg.text}</p>
+                {msg.sender === "user" ? (
+                  <p className="whitespace-pre-wrap">{msg.text}</p>
+                ) : (
+                  renderFormattedText(msg.text)
+                )}
               </div>
-
-              {/* RAG Sources list if provided */}
-              {msg.sources && msg.sources.length > 0 && (
-                <div className="p-3 rounded-xl bg-slate-100/70 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800 space-y-1.5">
-                  <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                    <BookOpen className="h-3 w-3 text-blue-500" />
-                    Knowledge Base RAG References ({msg.sources.length})
-                  </div>
-                  <div className="space-y-1">
-                    {msg.sources.slice(0, 2).map((src, i) => (
-                      <div key={i} className="text-[11px] text-slate-600 dark:text-slate-400 font-mono bg-white/60 dark:bg-slate-900/60 p-2 rounded-lg border border-slate-200/50 dark:border-slate-800">
-                        <span className="font-bold text-blue-600 dark:text-blue-400">[{src.category}]</span> {src.source}: {src.content.substring(0, 110)}...
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
 
               <span className={`block text-[10px] text-slate-400 font-mono ${msg.sender === "user" ? "text-right" : "text-left"}`}>
                 {msg.timestamp}
@@ -196,8 +262,9 @@ export function ConversationalAssistant({ submissionId, initialFindingQuery }: C
         {suggestionChips.map((chip, idx) => (
           <button
             key={idx}
+            type="button"
             onClick={() => handleSend(chip)}
-            className="flex-shrink-0 px-2.5 py-1 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:border-blue-400 hover:text-blue-600 transition-all font-medium"
+            className="flex-shrink-0 px-2.5 py-1 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:border-blue-400 hover:text-blue-600 transition-all font-medium cursor-pointer"
           >
             {chip}
           </button>
@@ -216,9 +283,10 @@ export function ConversationalAssistant({ submissionId, initialFindingQuery }: C
           className="rounded-xl border-slate-200 dark:border-slate-800 focus-visible:ring-blue-500 text-xs sm:text-sm"
         />
         <Button
+          type="button"
           onClick={() => handleSend()}
           disabled={!inputMessage.trim() || isLoading}
-          className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 flex-shrink-0"
+          className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 flex-shrink-0 cursor-pointer"
         >
           <Send className="h-4 w-4" />
         </Button>

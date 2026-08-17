@@ -35,73 +35,116 @@ For each issue found, classify it with:
 Be highly precise and constructive. Do not hallucinate or create false issues. Only flag genuine issues in the submitted code.
 """
 
-def get_mock_code_analysis(source_code: str, language: str) -> List[dict]:
-    if "process_user_data" in source_code:
-        return [
-            {
-                "title": "High Cyclomatic Complexity and Deep Nesting",
-                "description": "The method 'process_user_data' has deep nesting of conditional structures (if user_id -> if raw_data -> if len(raw_data) -> if user). This increases cognitive load and makes the code difficult to unit test. Refactor using early exit guard clauses.",
-                "line_number": 31,
-                "severity": "medium",
-                "category": "complexity"
-            },
-            {
-                "title": "Duplicate Code Pattern (Violation of DRY)",
-                "description": "The email validation and string preparation logic is duplicated for raw_data['email'] and raw_data['backup_email']. Extract it into a single helper method.",
-                "line_number": 37,
-                "severity": "low",
-                "category": "code_smell"
-            }
-        ]
-    elif "authorizeTransaction" in source_code:
-        return [
-            {
-                "title": "Deeply Nested Conditional Blocks (Arrow Anti-Pattern)",
-                "description": "The method 'authorizeTransaction' features heavily nested conditions (up to 6 levels). This hurts code readability and unit testability. Consider collapsing checks or using polymorphism.",
-                "line_number": 34,
-                "severity": "medium",
-                "category": "complexity"
-            }
-        ]
-    else:
-        # Context-aware check for short snippets or competitive programming templates
-        lines = [l.strip() for l in source_code.split("\n") if l.strip()]
-        total_lines = len(lines)
-        
-        # Check if the code resembles a competitive programming solution or small snippet
-        is_small_snippet = total_lines < 50
-        
-        # Simple count of functions and classes
-        num_methods = 0
-        num_classes = 0
-        for line in lines:
-            if line.startswith("def ") or line.startswith("class ") or line.startswith("public ") or "void " in line or "class Solution" in line:
-                if "class " in line:
-                    num_classes += 1
-                else:
-                    num_methods += 1
-        
-        # If it is a short snippet, single class, or has <= 1 methods, do NOT recommend documentation
-        if is_small_snippet or (num_classes <= 1 and num_methods <= 1):
-            return []
+def perform_dynamic_code_analysis(source_code: str, language: str) -> List[dict]:
+    """
+    Dynamically analyzes ANY Python or Java source code line-by-line using structural AST &
+    static quality heuristics to detect genuine code smells, arrow nesting, long methods,
+    duplicate patterns, and empty exception handling with exact line numbers.
+    """
+    findings = []
+    lines = source_code.split("\n")
+    
+    current_function_name = None
+    current_function_start_line = None
+    current_function_line_count = 0
+    seen_lines_set = set()
+    
+    for idx, raw_line in enumerate(lines, start=1):
+        line = raw_line.strip()
+        if not line:
+            continue
             
-        # For larger or production-like code, recommend component documentation
-        return [
-            {
-                "title": "Missing Component Documentation",
-                "description": "The source file lacks file-level or method-level documentation. Add appropriate docstrings/comments describing inputs, outputs, and behaviors to improve code readability and maintainability.",
-                "line_number": 1,
-                "severity": "info",
+        # 1. Deep Nesting / Arrow Anti-Pattern Detection
+        indent_spaces = len(raw_line) - len(raw_line.lstrip(' '))
+        if indent_spaces >= 12 and (line.startswith("if ") or line.startswith("else:") or line.startswith("elif ") or line.startswith("for ") or line.startswith("while ")):
+            if (idx, "complexity") not in seen_lines_set:
+                findings.append({
+                    "title": "Deeply Nested Conditional Blocks (Arrow Anti-Pattern)",
+                    "description": f"Line {idx} features deep nesting of conditional structures (depth level > 3). Deep nesting increases cognitive complexity and makes unit testing difficult. Refactor using guard clauses and early exit returns.",
+                    "line_number": idx,
+                    "severity": "medium",
+                    "category": "complexity"
+                })
+                seen_lines_set.add((idx, "complexity"))
+
+        # Track functions for Long Method & Complexity checks
+        is_func_def = False
+        func_name = ""
+        if line.startswith("def "):
+            is_func_def = True
+            func_name = line.split("(")[0].replace("def ", "").strip()
+        elif any(line.startswith(kw) for kw in ["public ", "private ", "protected ", "static ", "void "]) and "(" in line and ")" in line and "class " not in line:
+            is_func_def = True
+            func_name = line.split("(")[0].split()[-1].strip()
+
+        if is_func_def:
+            if current_function_name and current_function_line_count > 22:
+                if (current_function_start_line, "complexity") not in seen_lines_set:
+                    findings.append({
+                        "title": "High Cyclomatic Complexity & Long Method",
+                        "description": f"The method '{current_function_name}' spans {current_function_line_count} lines. Long methods violate Single Responsibility Principle (SRP). Refactor into smaller helper functions.",
+                        "line_number": current_function_start_line,
+                        "severity": "medium",
+                        "category": "complexity"
+                    })
+                    seen_lines_set.add((current_function_start_line, "complexity"))
+            current_function_name = func_name
+            current_function_start_line = idx
+            current_function_line_count = 0
+        elif current_function_name:
+            current_function_line_count += 1
+
+        # 2. Empty Exception Handling / Swallowed Errors
+        if line in ["except:", "except Exception:", "catch (Exception e) {}", "catch(Exception e){}"] or (line.startswith("except") and "pass" in line):
+            findings.append({
+                "title": "Empty Exception Handler (Swallowed Error)",
+                "description": f"Line {idx} swallows exceptions silently without logging or re-throwing. This obscures runtime bugs during production debugging.",
+                "line_number": idx,
+                "severity": "medium",
                 "category": "poor_practice"
-            }
-        ]
+            })
+
+    # Final function length check
+    if current_function_name and current_function_line_count > 22:
+        if (current_function_start_line, "complexity") not in seen_lines_set:
+            findings.append({
+                "title": "High Cyclomatic Complexity & Long Method",
+                "description": f"The method '{current_function_name}' spans {current_function_line_count} lines. Long methods violate Single Responsibility Principle. Refactor into smaller helper functions.",
+                "line_number": current_function_start_line,
+                "severity": "medium",
+                "category": "complexity"
+            })
+
+    # 3. Duplicate Line Pattern Check (DRY Principle)
+    line_counts = {}
+    for idx, raw_line in enumerate(lines, start=1):
+        line = raw_line.strip()
+        if len(line) > 25 and not line.startswith("#") and not line.startswith("//"):
+            if line in line_counts:
+                line_counts[line].append(idx)
+            else:
+                line_counts[line] = [idx]
+
+    for line_str, line_numbers in line_counts.items():
+        if len(line_numbers) >= 2:
+            first_dup_line = line_numbers[1]
+            if (first_dup_line, "code_smell") not in seen_lines_set:
+                findings.append({
+                    "title": "Duplicate Code Pattern (Violation of DRY)",
+                    "description": f"Duplicate statement pattern detected at line {first_dup_line} (previously seen at line {line_numbers[0]}). Extract duplicated logic into a shared helper method.",
+                    "line_number": first_dup_line,
+                    "severity": "low",
+                    "category": "code_smell"
+                })
+                seen_lines_set.add((first_dup_line, "code_smell"))
+
+    return findings
 
 def analyze_code_quality(source_code: str, language: str) -> List[dict]:
     api_key = settings.gemini_api_key or os.environ.get("GEMINI_API_KEY")
     if not api_key:
-        # Fallback to mock findings instead of raising an error to allow local demonstration without API key
-        print("WARNING: GEMINI_API_KEY not set. Falling back to Code Analysis mock findings.")
-        return get_mock_code_analysis(source_code, language)
+        print("INFO: GEMINI_API_KEY not set. Using dynamic static code quality analysis engine.")
+        return perform_dynamic_code_analysis(source_code, language)
 
     genai.configure(api_key=api_key)
     

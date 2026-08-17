@@ -1,4 +1,4 @@
-# System Architecture — AI Code Review & Security Analysis Agent
+# System Architecture — Development of Smart Code Inspection Platform with Vulnerability Detection System Group 2
 
 ## Overview
 

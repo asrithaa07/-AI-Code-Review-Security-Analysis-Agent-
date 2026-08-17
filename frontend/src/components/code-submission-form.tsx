@@ -10,15 +10,13 @@ import {
   FileCode, 
   FileDown, 
   ShieldAlert, 
-  Info,
   ShieldCheck,
   Check,
   Copy,
   MessageSquare,
-  ListOrdered,
   FileText,
-  Terminal,
-  Activity
+  Activity,
+  GitCompare
 } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -31,26 +29,86 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Language, Submission, Finding, submitPaste, submitUpload, getSubmissionDetails } from "@/lib/api";
 import { ConversationalAssistant } from "@/components/conversational-assistant";
+import { SeverityPieChart } from "@/components/severity-pie-chart";
+import { CodeDiffViewer } from "@/components/code-diff-viewer";
+import { SecurityMatrix } from "@/components/security-matrix";
+import { AgentPipelineVisualizer } from "@/components/agent-pipeline-visualizer";
 
 interface CodeSubmissionFormProps {
   onSubmissionComplete: (submission: Submission) => void;
 }
 
-const SAMPLE_PYTHON = `def get_user(user_id):
-    query = f"SELECT * FROM users WHERE id = {user_id}"
+const PRESET_SAMPLES = [
+  {
+    label: "🐍 SQLi & Secret (Python)",
+    lang: "python",
+    filename: "auth_service.py",
+    code: `import sqlite3
+
+API_KEY = "sk-live-secret-key-9920112"
+
+def get_user_profile(user_id):
+    conn = sqlite3.connect("users.db")
+    cursor = conn.cursor()
+    # OWASP A03: SQL Injection Vulnerability
+    query = f"SELECT * FROM users WHERE id = '{user_id}' AND is_active = 1"
     cursor.execute(query)
     return cursor.fetchone()
-`;
+`,
+  },
+  {
+    label: "🐍 Complexity Smell (Python)",
+    lang: "python",
+    filename: "order_processor.py",
+    code: `def process_orders(orders):
+    results = []
+    # High cyclomatic complexity anti-pattern & deep nesting
+    for o in orders:
+        if o != None:
+            if o.get("status") == "pending":
+                if o.get("total") > 100:
+                    if o.get("customer") != None:
+                        if o["customer"].get("is_verified") == True:
+                            results.append(o)
+                        else:
+                            pass
+    return results
+`,
+  },
+  {
+    label: "☕ Raw SQL & Hardcoded Auth (Java)",
+    lang: "java",
+    filename: "AuthManager.java",
+    code: `public class AuthManager {
+    private static final String AWS_SECRET = "AKIAIOSFODNN7EXAMPLE";
 
-const SAMPLE_JAVA = `public class AuthService {
-    private static final String API_KEY = "sk-secret-key-12345";
-
-    public User login(String username, String password) {
-        String sql = "SELECT * FROM users WHERE username = '" + username + "'";
-        return db.query(sql);
+    public User authenticate(String username, String password) {
+        // OWASP A03 SQL Injection
+        String query = "SELECT * FROM accounts WHERE user='" + username + "' AND pass='" + password + "'";
+        Statement stmt = connection.createStatement();
+        ResultSet rs = stmt.executeQuery(query);
+        return parseUser(rs);
     }
 }
-`;
+`,
+  },
+  {
+    label: "☕ Insecure Deserialization (Java)",
+    lang: "java",
+    filename: "DataHandler.java",
+    code: `import java.io.*;
+
+public class DataHandler {
+    public Object readUserSession(byte[] rawData) throws Exception {
+        // OWASP A08: Insecure Deserialization vulnerability
+        ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(rawData));
+        return in.readObject();
+    }
+}
+`,
+  },
+];
+
 
 export function CodeSubmissionForm({ onSubmissionComplete }: CodeSubmissionFormProps) {
   const [sourceCode, setSourceCode] = useState("");
@@ -169,29 +227,28 @@ export function CodeSubmissionForm({ onSubmissionComplete }: CodeSubmissionFormP
               </div>
             </div>
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <Label htmlFor="source-code" className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Source Code</Label>
-                <div className="flex items-center gap-2">
-                  <button 
-                    type="button" 
-                    onClick={() => setSourceCode(SAMPLE_PYTHON)} 
-                    className="inline-flex items-center text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 px-3 py-1.5 rounded-lg border border-blue-200 dark:border-blue-900 cursor-pointer"
-                  >
-                    <Sparkles className="mr-1 h-3.5 w-3.5" />
-                    Load Sample Python
-                  </button>
-                  <button 
-                    type="button" 
-                    onClick={() => setSourceCode(SAMPLE_JAVA)} 
-                    className="inline-flex items-center text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 px-3 py-1.5 rounded-lg border border-indigo-200 dark:border-indigo-900 cursor-pointer"
-                  >
-                    <Sparkles className="mr-1 h-3.5 w-3.5" />
-                    Load Sample Java
-                  </button>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <Label htmlFor="source-code" className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Source Code</Label>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {PRESET_SAMPLES.map((sample, idx) => (
+                      <button 
+                        key={idx}
+                        type="button" 
+                        onClick={() => {
+                          setSourceCode(sample.code);
+                          setFilename(sample.filename);
+                        }} 
+                        className="inline-flex items-center text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 px-2.5 py-1 rounded-lg border border-blue-200 dark:border-blue-900 cursor-pointer transition-colors"
+                        title={`Load sample code (${sample.filename})`}
+                      >
+                        <Sparkles className="mr-1 h-3 w-3 text-blue-500" />
+                        {sample.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-              <div className="w-full relative rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-1">
+                <div className="w-full relative rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-1">
                 <Textarea
                   id="source-code"
                   placeholder="Paste your Python or Java source code here..."
@@ -307,10 +364,11 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
   const [selectedFindingId, setSelectedFindingId] = useState<string | null>(null);
   const [severityFilter, setSeverityFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all"); // all, security, quality, owasp
-  const [activePortalTab, setActivePortalTab] = useState<"findings" | "pr_summary" | "full_code" | "assistant">("findings");
+  const [activePortalTab, setActivePortalTab] = useState<"findings" | "diff" | "owasp" | "pr_summary" | "full_code" | "assistant">("findings");
   const [assistantQuery, setAssistantQuery] = useState<string | undefined>(undefined);
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
   const [copiedFullCode, setCopiedFullCode] = useState<boolean>(false);
+  const [showDiffInFullCode, setShowDiffInFullCode] = useState<boolean>(false);
 
   // Sync state if initialSubmission changes from parent
   useEffect(() => {
@@ -341,28 +399,21 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
     window.open(`${API_URL}/api/v1/submissions/${submission.id}/pdf`, "_blank");
   };
 
-  const downloadMarkdown = () => {
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-    window.open(`${API_URL}/api/v1/submissions/${submission.id}/markdown`, "_blank");
-  };
-
-  const downloadJson = () => {
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-    window.open(`${API_URL}/api/v1/submissions/${submission.id}/json`, "_blank");
-  };
-
   if (submission.status === "pending" || submission.status === "analyzing") {
     return (
-      <Card className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-xl rounded-2xl overflow-hidden backdrop-blur-sm p-12 flex flex-col items-center justify-center min-h-[450px]">
-        <div className="relative flex items-center justify-center mb-6">
-          <div className="absolute h-16 w-16 rounded-full border-4 border-blue-100 dark:border-blue-950 animate-pulse"></div>
-          <Loader2 className="h-10 w-10 text-blue-600 dark:text-blue-400 animate-spin relative" />
-        </div>
-        <h4 className="text-lg font-bold text-slate-800 dark:text-slate-200">Analyzing Your Code</h4>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 text-center max-w-sm">
-          Running LangGraph Orchestrator pipeline: parallel execution of Code Analysis, Security Vulnerability, Remediation, and PR Summary agents...
-        </p>
-      </Card>
+      <div className="space-y-6">
+        <AgentPipelineVisualizer status="analyzing" />
+        <Card className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-xl rounded-2xl overflow-hidden backdrop-blur-sm p-12 flex flex-col items-center justify-center min-h-[300px]">
+          <div className="relative flex items-center justify-center mb-6">
+            <div className="absolute h-16 w-16 rounded-full border-4 border-blue-100 dark:border-blue-950 animate-pulse"></div>
+            <Loader2 className="h-10 w-10 text-blue-600 dark:text-blue-400 animate-spin relative" />
+          </div>
+          <h4 className="text-lg font-bold text-slate-800 dark:text-slate-200">Analyzing Your Code</h4>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 text-center max-w-sm">
+            Running LangGraph Orchestrator pipeline: parallel execution of Code Analysis, Security Vulnerability, Remediation, and PR Summary agents...
+          </p>
+        </Card>
+      </div>
     );
   }
 
@@ -388,11 +439,6 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
 
   const findings = submission.findings || [];
 
-  // OWASP Category extraction for prominent display & filtering
-  const owaspCategoriesFound = Array.from(
-    new Set(findings.map((f) => f.owasp_category).filter((c): c is string => Boolean(c)))
-  );
-
   // Filter findings based on user controls
   const filteredFindings = findings.filter((f) => {
     const matchesSeverity = severityFilter === "all" || f.severity.toLowerCase() === severityFilter.toLowerCase();
@@ -402,6 +448,7 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
       (typeFilter === "security" && f.agent_source === "security_vulnerability") ||
       (typeFilter === "quality" && f.agent_source === "code_analysis") ||
       (typeFilter === "owasp" && Boolean(f.owasp_category));
+
     return matchesSeverity && matchesType;
   });
 
@@ -487,11 +534,16 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
     return `${bgClass} ${borderClass}`;
   };
 
-  const scores = submission.severity_scores || { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
+  const scores = {
+    critical: Number(submission.severity_scores?.critical ?? 0),
+    high: Number(submission.severity_scores?.high ?? 0),
+    medium: Number(submission.severity_scores?.medium ?? 0),
+    low: Number(submission.severity_scores?.low ?? 0),
+    info: Number(submission.severity_scores?.info ?? 0),
+  };
   const computedScore = Math.max(0, Math.min(100, 100 - (scores.critical * 30) - (scores.high * 15) - (scores.medium * 8) - (scores.low * 3) - (scores.info * 1)));
   const healthScore = (submission.health_score !== undefined && submission.health_score !== null) ? submission.health_score : computedScore;
   const totalFindings = findings.length;
-  const hasSevereIssues = findings.some((f) => ["critical", "high", "medium"].includes(f.severity.toLowerCase()));
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -534,38 +586,18 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
                 </div>
               </div>
 
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={downloadPdf}
-                className="rounded-xl border-slate-200 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800 font-semibold h-9 px-3 text-xs"
-                title="Export report as PDF document"
-              >
-                <FileDown className="mr-1.5 h-3.5 w-3.5 text-blue-500" />
-                PDF
-              </Button>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={downloadMarkdown}
-                className="rounded-xl border-slate-200 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800 font-semibold h-9 px-3 text-xs"
-                title="Export report as Markdown"
-              >
-                <FileText className="mr-1.5 h-3.5 w-3.5 text-indigo-500" />
-                Markdown
-              </Button>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={downloadJson}
-                className="rounded-xl border-slate-200 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800 font-semibold h-9 px-3 text-xs"
-                title="Export raw JSON findings report"
-              >
-                <FileCode className="mr-1.5 h-3.5 w-3.5 text-emerald-500" />
-                JSON
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={downloadPdf}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl h-9 px-4 text-xs shadow-md shadow-blue-500/10 cursor-pointer"
+                  title="Export complete review report as PDF"
+                >
+                  <FileDown className="mr-1.5 h-4 w-4" />
+                  PDF Report
+                </Button>
+              </div>
             </div>
           </div>
         </CardHeader>
@@ -593,13 +625,23 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
           </Button>
 
           <Button
+            variant={activePortalTab === "owasp" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setActivePortalTab("owasp")}
+            className={`rounded-xl font-bold text-xs ${activePortalTab === "owasp" ? "bg-purple-600 text-white shadow-md shadow-purple-500/10" : "text-slate-600 dark:text-slate-300"}`}
+          >
+            <ShieldAlert className="mr-1.5 h-4 w-4" />
+            OWASP Matrix Heatmap
+          </Button>
+
+          <Button
             variant={activePortalTab === "full_code" ? "default" : "ghost"}
             size="sm"
             onClick={() => setActivePortalTab("full_code")}
             className={`rounded-xl font-bold text-xs ${activePortalTab === "full_code" ? "bg-emerald-600 text-white shadow-md shadow-emerald-500/10" : "text-slate-600 dark:text-slate-300"}`}
           >
             <Sparkles className="mr-1.5 h-4 w-4 text-emerald-300" />
-            Full Remediated Code
+            Full Remediated Code &amp; Diff
           </Button>
 
           <Button
@@ -612,33 +654,13 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
             Conversational Code Assistant (RAG)
           </Button>
         </div>
-
-        {/* Prominent OWASP Security Impact Header Row (If OWASP issues found) */}
-        {owaspCategoriesFound.length > 0 && (
-          <div className="p-4 bg-purple-950/10 border-b border-purple-200/40 dark:border-purple-900/30 px-6 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <ShieldAlert className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-              <span className="text-xs font-bold text-purple-900 dark:text-purple-300 uppercase tracking-wider">
-                OWASP Security Standards Flagged ({owaspCategoriesFound.length}):
-              </span>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {owaspCategoriesFound.map((cat, idx) => (
-                <Badge
-                  key={idx}
-                  className="bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-300 dark:border-purple-800 font-mono text-[11px] px-2.5 py-0.5"
-                >
-                  🛡️ {cat}
-                </Badge>
-              ))}
-            </div>
-          </div>
-        )}
       </Card>
 
       {/* Main Tab Content */}
       {activePortalTab === "findings" && (
         <div className="space-y-6">
+          {/* Visual Severity Breakdown Pie Chart */}
+          <SeverityPieChart scores={scores} />
           {/* Two-Column Explorer Layout */}
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
             {/* Left column: Findings List */}
@@ -660,26 +682,30 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
                   {/* Category Filter Chips */}
                   <div className="flex bg-slate-100 dark:bg-slate-950 p-1 rounded-lg text-[10px] sm:text-[11px] font-semibold flex-wrap gap-1">
                     <button
+                      type="button"
                       onClick={() => setTypeFilter("all")}
-                      className={`flex-1 py-1 px-2 rounded-md transition-all ${typeFilter === "all" ? "bg-white dark:bg-slate-900 shadow text-blue-600 dark:text-blue-400" : "text-slate-500"}`}
+                      className={`flex-1 py-1 px-2 rounded-md transition-all cursor-pointer ${typeFilter === "all" ? "bg-white dark:bg-slate-900 shadow text-blue-600 dark:text-blue-400" : "text-slate-500"}`}
                     >
-                      All ({findings.length})
+                      All ({filteredFindings.length})
                     </button>
                     <button
+                      type="button"
                       onClick={() => setTypeFilter("security")}
-                      className={`flex-1 py-1 px-2 rounded-md transition-all ${typeFilter === "security" ? "bg-white dark:bg-slate-900 shadow text-purple-600 dark:text-purple-400" : "text-slate-500"}`}
+                      className={`flex-1 py-1 px-2 rounded-md transition-all cursor-pointer ${typeFilter === "security" ? "bg-white dark:bg-slate-900 shadow text-purple-600 dark:text-purple-400" : "text-slate-500"}`}
                     >
                       Security ({findings.filter((f) => f.agent_source === "security_vulnerability").length})
                     </button>
                     <button
+                      type="button"
                       onClick={() => setTypeFilter("owasp")}
-                      className={`flex-1 py-1 px-2 rounded-md transition-all ${typeFilter === "owasp" ? "bg-white dark:bg-slate-900 shadow text-indigo-600 dark:text-indigo-400" : "text-slate-500"}`}
+                      className={`flex-1 py-1 px-2 rounded-md transition-all cursor-pointer ${typeFilter === "owasp" ? "bg-white dark:bg-slate-900 shadow text-indigo-600 dark:text-indigo-400" : "text-slate-500"}`}
                     >
                       OWASP Top 10 ({findings.filter((f) => Boolean(f.owasp_category)).length})
                     </button>
                     <button
+                      type="button"
                       onClick={() => setTypeFilter("quality")}
-                      className={`flex-1 py-1 px-2 rounded-md transition-all ${typeFilter === "quality" ? "bg-white dark:bg-slate-900 shadow text-amber-600 dark:text-amber-500" : "text-slate-500"}`}
+                      className={`flex-1 py-1 px-2 rounded-md transition-all cursor-pointer ${typeFilter === "quality" ? "bg-white dark:bg-slate-900 shadow text-amber-600 dark:text-amber-500" : "text-slate-500"}`}
                     >
                       Quality ({findings.filter((f) => f.agent_source === "code_analysis").length})
                     </button>
@@ -688,42 +714,47 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
                   {/* Severity filter row */}
                   <div className="flex flex-wrap gap-1.5">
                     <Button
+                      type="button"
                       variant={severityFilter === "all" ? "default" : "outline"}
                       size="xs"
                       onClick={() => setSeverityFilter("all")}
-                      className="text-[10px] font-bold h-6 rounded-md"
+                      className="text-[10px] font-bold h-6 rounded-md cursor-pointer"
                     >
                       All
                     </Button>
                     <Button
+                      type="button"
                       variant={severityFilter === "critical" ? "destructive" : "outline"}
                       size="xs"
                       onClick={() => setSeverityFilter("critical")}
-                      className="text-[10px] font-bold h-6 rounded-md"
+                      className="text-[10px] font-bold h-6 rounded-md cursor-pointer"
                     >
                       Critical ({scores.critical})
                     </Button>
                     <Button
+                      type="button"
                       variant={severityFilter === "high" ? "destructive" : "outline"}
                       size="xs"
                       onClick={() => setSeverityFilter("high")}
-                      className="text-[10px] font-bold h-6 rounded-md"
+                      className="text-[10px] font-bold h-6 rounded-md cursor-pointer"
                     >
                       High ({scores.high})
                     </Button>
                     <Button
+                      type="button"
                       variant={severityFilter === "medium" ? "default" : "outline"}
                       size="xs"
                       onClick={() => setSeverityFilter("medium")}
-                      className="text-[10px] font-bold h-6 rounded-md"
+                      className="text-[10px] font-bold h-6 rounded-md cursor-pointer"
                     >
                       Medium ({scores.medium})
                     </Button>
                     <Button
+                      type="button"
                       variant={severityFilter === "low" ? "default" : "outline"}
                       size="xs"
                       onClick={() => setSeverityFilter("low")}
-                      className="text-[10px] font-bold h-6 rounded-md"
+                      className="text-[10px] font-bold h-6 rounded-md cursor-pointer"
                     >
                       Low ({scores.low})
                     </Button>
@@ -740,8 +771,15 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
                     filteredFindings.map((f) => (
                       <button
                         key={f.id}
-                        onClick={() => setSelectedFindingId(f.id)}
-                        className={`w-full text-left p-4 hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-all flex flex-col gap-2 ${
+                        type="button"
+                        onClick={() => {
+                          setSelectedFindingId(f.id);
+                          setTimeout(() => {
+                            const el = document.getElementById("selected-finding-remediation");
+                            if (el) el.scrollIntoView({ behavior: "smooth" });
+                          }, 50);
+                        }}
+                        className={`w-full text-left p-4 hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-all flex flex-col gap-2 cursor-pointer ${
                           selectedFindingId === f.id ? "bg-blue-50/30 dark:bg-blue-950/25 border-r-4 border-blue-500" : ""
                         }`}
                       >
@@ -816,7 +854,7 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
 
           {/* Selected Finding Remediation & Explanation Card */}
           {selectedFinding && (
-            <Card className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-xl rounded-2xl overflow-hidden backdrop-blur-sm animate-in fade-in slide-in-from-bottom-4 duration-300">
+            <Card id="selected-finding-remediation" className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-xl rounded-2xl overflow-hidden backdrop-blur-sm animate-in fade-in slide-in-from-bottom-4 duration-300 scroll-mt-28">
               <CardHeader className="p-6 border-b border-slate-100 dark:border-slate-800/60 bg-gradient-to-r from-slate-50 to-blue-50/30 dark:from-slate-950 dark:to-slate-900 flex flex-col sm:flex-row justify-between gap-4">
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -840,13 +878,14 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
                     {selectedFinding.line_number != null ? `Line ${selectedFinding.line_number}` : "Global Scope"}
                   </span>
                   <Button
+                    type="button"
                     size="sm"
                     variant="outline"
                     onClick={() => {
                       setAssistantQuery(`Explain ${selectedFinding.title} (${selectedFinding.cwe_id || selectedFinding.owasp_category || ""}) and how to fix it.`);
                       setActivePortalTab("assistant");
                     }}
-                    className="text-xs font-semibold border-blue-200 dark:border-blue-900 text-blue-600 dark:text-blue-400 rounded-xl"
+                    className="text-xs font-semibold border-blue-200 dark:border-blue-900 text-blue-600 dark:text-blue-400 rounded-xl cursor-pointer"
                   >
                     <MessageSquare className="mr-1.5 h-3.5 w-3.5" />
                     Ask Assistant About Fix
@@ -915,8 +954,12 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
           )}
         </div>
       )}
+      {/* OWASP Top 10 Security Matrix Heatmap Tab */}
+      {activePortalTab === "owasp" && (
+        <SecurityMatrix findings={submission.findings || []} />
+      )}
 
-      {/* PR Review Summary Tab */}
+      {/* PR Review & Code Diff Summary Tab */}
       {activePortalTab === "pr_summary" && (
         <Card className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-xl rounded-2xl overflow-hidden backdrop-blur-sm p-6 space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800/60">
@@ -1021,40 +1064,96 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
         </Card>
       )}
 
-      {/* Full Remediated Code Tab */}
+      {/* Full Remediated Code & Diff Tab */}
       {activePortalTab === "full_code" && (
         <Card className="border border-emerald-200 dark:border-emerald-900/60 bg-white dark:bg-slate-900/60 shadow-xl rounded-2xl overflow-hidden backdrop-blur-sm p-6 space-y-6">
+          {/* Header with View Switcher and single Copy button */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800/60">
             <div>
               <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-emerald-500" />
-                Fully Remediated &amp; Production-Ready Source Code
+                {showDiffInFullCode ? "Side-by-Side Code Remediation Diff" : "Fully Remediated & Production-Ready Source Code"}
               </h3>
               <p className="text-xs text-slate-500 mt-1">
-                Complete refactored source file addressing all flagged OWASP vulnerabilities and code quality smells.
+                {showDiffInFullCode
+                  ? "Visual side-by-side AST comparison comparing original vulnerable code with AI-generated secure refactored code."
+                  : "Complete refactored source file addressing all flagged OWASP vulnerabilities and code quality smells."}
               </p>
             </div>
-            <Button
-              onClick={() => {
-                const fullCode = submission.pr_summary?.full_remediated_code || submission.source_code;
-                navigator.clipboard.writeText(fullCode);
-                setCopiedFullCode(true);
-                setTimeout(() => setCopiedFullCode(false), 2000);
-              }}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl px-5 py-2 text-xs flex items-center gap-2 shadow-md shadow-emerald-500/10 flex-shrink-0 cursor-pointer"
-            >
-              {copiedFullCode ? <Check className="h-4 w-4 text-white" /> : <Copy className="h-4 w-4" />}
-              {copiedFullCode ? "Copied Refactored Code!" : "Copy Complete Code"}
-            </Button>
+
+            <div className="flex flex-wrap items-center gap-3 flex-shrink-0">
+              {/* Segmented View Switcher */}
+              <div className="flex items-center rounded-xl bg-slate-100 dark:bg-slate-950 p-1 border border-slate-200 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowDiffInFullCode(false)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    !showDiffInFullCode
+                      ? "bg-white dark:bg-slate-900 shadow text-emerald-600 dark:text-emerald-400"
+                      : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                  }`}
+                >
+                  <FileCode className="h-3.5 w-3.5" />
+                  Full Code
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowDiffInFullCode(true)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    showDiffInFullCode
+                      ? "bg-white dark:bg-slate-900 shadow text-indigo-600 dark:text-indigo-400"
+                      : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                  }`}
+                >
+                  <GitCompare className="h-3.5 w-3.5" />
+                  Compare Side-by-Side Diff
+                </button>
+              </div>
+
+              {/* Single Primary Copy Button */}
+              <Button
+                type="button"
+                onClick={() => {
+                  const fullCode = submission.pr_summary?.full_remediated_code || submission.source_code;
+                  navigator.clipboard.writeText(fullCode);
+                  setCopiedFullCode(true);
+                  setTimeout(() => setCopiedFullCode(false), 2000);
+                }}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl px-4 py-2 text-xs flex items-center gap-2 shadow-md shadow-emerald-500/10 cursor-pointer"
+              >
+                {copiedFullCode ? <Check className="h-4 w-4 text-white" /> : <Copy className="h-4 w-4" />}
+                {copiedFullCode ? "Copied Remediated Code!" : "Copy Remediated Code"}
+              </Button>
+            </div>
           </div>
 
-          <div className="relative rounded-2xl border border-slate-800 bg-slate-950 p-6 overflow-x-auto shadow-inner">
-            <pre className="font-mono text-xs leading-relaxed text-emerald-300 whitespace-pre">
-              {submission.pr_summary?.full_remediated_code || (
-                "# All findings resolved.\n# Submitted code complies with secure coding standards:\n\n" + submission.source_code
-              )}
-            </pre>
-          </div>
+          {/* In-Place Content Switcher: Renders either the Full Code or the Side-by-Side Diff directly in place */}
+          {!showDiffInFullCode ? (
+            <div className="space-y-3 animate-in fade-in duration-300">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                  <FileCode className="h-4 w-4 text-emerald-500" />
+                  Production-Ready Refactored File
+                </h4>
+              </div>
+              <div className="relative rounded-2xl border border-slate-800 bg-slate-950 p-6 overflow-x-auto shadow-inner">
+                <pre className="font-mono text-xs leading-relaxed text-emerald-300 whitespace-pre">
+                  {submission.pr_summary?.full_remediated_code || (
+                    "# All findings resolved.\n# Submitted code complies with secure coding standards:\n\n" + submission.source_code
+                  )}
+                </pre>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3 animate-in fade-in duration-300">
+              <CodeDiffViewer
+                originalCode={submission.source_code}
+                remediatedCode={submission.pr_summary?.full_remediated_code || submission.source_code}
+                language={submission.language}
+                showCopyButton={false}
+              />
+            </div>
+          )}
         </Card>
       )}
 

@@ -163,10 +163,22 @@ export async function submitUpload(file: File): Promise<Submission> {
 }
 
 export async function getMySubmissions(skip = 0, limit = 50): Promise<{ items: Submission[]; total: number }> {
-  const response = await fetch(`${API_URL}/api/v1/submissions/my-submissions?skip=${skip}&limit=${limit}`, {
-    headers: getHeaders(),
-  });
-  return handleResponse<{ items: Submission[]; total: number }>(response);
+  const token = typeof window !== "undefined" ? localStorage.getItem("spotlight_token") : null;
+  const url = token 
+    ? `${API_URL}/api/v1/submissions/my-submissions?skip=${skip}&limit=${limit}`
+    : `${API_URL}/api/v1/submissions?skip=${skip}&limit=${limit}`;
+  
+  try {
+    const response = await fetch(url, { headers: getHeaders() });
+    return await handleResponse<{ items: Submission[]; total: number }>(response);
+  } catch (error) {
+    if (token) {
+      // Retry with public endpoint if authenticated endpoint fails
+      const fallbackRes = await fetch(`${API_URL}/api/v1/submissions?skip=${skip}&limit=${limit}`);
+      return await handleResponse<{ items: Submission[]; total: number }>(fallbackRes);
+    }
+    throw error;
+  }
 }
 
 export async function getKnowledgeBaseStatus(): Promise<KnowledgeBaseStatus> {

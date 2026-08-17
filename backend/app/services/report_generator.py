@@ -66,7 +66,7 @@ class ReportGenerator:
         story = []
 
         # Header Title
-        story.append(Paragraph("Spotlight AI - Security Analysis & PR Review Report", title_style))
+        story.append(Paragraph("Development of Smart Code Inspection Platform with Vulnerability Detection System Group 2 - Security Analysis & PR Review Report", title_style))
         story.append(Spacer(1, 10))
 
         # Metadata Table
@@ -185,6 +185,35 @@ class ReportGenerator:
                 story.append(owasp_table)
                 story.append(Spacer(1, 15))
 
+            # Prioritized Remediation Roadmap Section
+            prioritized_fixes = pr_sum.get("prioritized_fix_list") or []
+            if prioritized_fixes:
+                story.append(Paragraph("Prioritized Remediation Roadmap", subtitle_style))
+                story.append(Spacer(1, 5))
+                fix_data = [[
+                    Paragraph("<b>Priority</b>", body_style),
+                    Paragraph("<b>Issue Title</b>", body_style),
+                    Paragraph("<b>Recommended Action</b>", body_style)
+                ]]
+                for fix in prioritized_fixes:
+                    p_str = f"Priority {fix.get('priority', 1)}"
+                    fix_data.append([
+                        Paragraph(f"<b><font color='#3b82f6'>{p_str}</font></b>", body_style),
+                        Paragraph(html.escape(fix.get("issue_title", "")), body_style),
+                        Paragraph(html.escape(fix.get("action_item", "")), body_style)
+                    ])
+                fix_table = Table(fix_data, colWidths=[80, 200, 260])
+                fix_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
+                    ('PADDING', (0, 0), (-1, -1), 6),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ('LINEBELOW', (0, 0), (-1, -1), 0.5, colors.HexColor("#e2e8f0")),
+                    ('BOX', (0, 0), (-1, -1), 1, colors.HexColor("#cbd5e1")),
+                ]))
+                story.append(fix_table)
+                story.append(Spacer(1, 15))
+
             # Detailed Findings & Remediation Recommendations
             story.append(Paragraph("Detailed Findings & Remediation Guidance", subtitle_style))
             story.append(Spacer(1, 5))
@@ -246,17 +275,20 @@ class ReportGenerator:
             story.append(Spacer(1, 5))
 
             rem_lines = full_code.splitlines()
-            numbered_rem_code = "\n".join(f"{i+1:3d} | {html.escape(line)}" for i, line in enumerate(rem_lines))
-            rem_code_data = [[Preformatted(numbered_rem_code, code_style)]]
-            rem_code_table = Table(rem_code_data, colWidths=[540])
-            rem_code_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#022c22")),
-                ('PADDING', (0, 0), (-1, -1), 12),
-                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                ('BOX', (0, 0), (-1, -1), 1, colors.HexColor("#065f46")),
-            ]))
-            story.append(rem_code_table)
+            CHUNK_SIZE = 30
+            for chunk_idx in range(0, len(rem_lines), CHUNK_SIZE):
+                chunk = rem_lines[chunk_idx : chunk_idx + CHUNK_SIZE]
+                numbered_chunk = "\n".join(f"{chunk_idx + i + 1:3d} | {html.escape(line)}" for i, line in enumerate(chunk))
+                chunk_table = Table([[Preformatted(numbered_chunk, code_style)]], colWidths=[540])
+                chunk_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#022c22")),
+                    ('PADDING', (0, 0), (-1, -1), 8),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ('BOX', (0, 0), (-1, -1), 1, colors.HexColor("#065f46")),
+                ]))
+                story.append(chunk_table)
+                story.append(Spacer(1, 4))
 
         # Submitted Code Listing
         story.append(Spacer(1, 10))
@@ -264,18 +296,20 @@ class ReportGenerator:
         story.append(Spacer(1, 5))
 
         lines = submission.source_code.splitlines()
-        numbered_code = "\n".join(f"{i+1:3d} | {html.escape(line)}" for i, line in enumerate(lines))
-
-        code_data = [[Preformatted(numbered_code, code_style)]]
-        code_table = Table(code_data, colWidths=[540])
-        code_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#0f172a")),
-            ('PADDING', (0, 0), (-1, -1), 12),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('BOX', (0, 0), (-1, -1), 1, colors.HexColor("#1e293b")),
-        ]))
-        story.append(code_table)
+        CHUNK_SIZE = 30
+        for chunk_idx in range(0, len(lines), CHUNK_SIZE):
+            chunk = lines[chunk_idx : chunk_idx + CHUNK_SIZE]
+            numbered_chunk = "\n".join(f"{chunk_idx + i + 1:3d} | {html.escape(line)}" for i, line in enumerate(chunk))
+            chunk_table = Table([[Preformatted(numbered_chunk, code_style)]], colWidths=[540])
+            chunk_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#0f172a")),
+                ('PADDING', (0, 0), (-1, -1), 8),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('BOX', (0, 0), (-1, -1), 1, colors.HexColor("#1e293b")),
+            ]))
+            story.append(chunk_table)
+            story.append(Spacer(1, 4))
 
         doc.build(story)
         pdf_bytes = buffer.getvalue()
@@ -287,7 +321,7 @@ class ReportGenerator:
         health_score_str = f"{submission.health_score}/100" if submission.health_score is not None else "N/A"
         
         md = []
-        md.append("# Spotlight AI - Security Analysis & PR Review Report\n")
+        md.append("# Development of Smart Code Inspection Platform with Vulnerability Detection System Group 2 - Security Analysis & PR Review Report\n")
         md.append(f"- **Submission ID:** `{submission.id}`")
         md.append(f"- **Language / Type:** {submission.language.value.upper()} ({submission.submission_type.value.upper()})")
         md.append(f"- **Filename:** {submission.filename or 'pasted_code'}")
@@ -313,6 +347,15 @@ class ReportGenerator:
             md.append("|---|---|---|")
             for owasp in owasp_items:
                 md.append(f"| {owasp.get('category', '')} | {owasp.get('finding_title', '')} | {owasp.get('risk_level', '')} |")
+            md.append("")
+
+        prioritized_fixes = pr_sum.get("prioritized_fix_list") or []
+        if prioritized_fixes:
+            md.append("## Prioritized Remediation Roadmap\n")
+            md.append("| Priority | Issue Title | Recommended Action |")
+            md.append("|---|---|---|")
+            for fix in prioritized_fixes:
+                md.append(f"| Priority {fix.get('priority', 1)} | {fix.get('issue_title', '')} | {fix.get('action_item', '')} |")
             md.append("")
 
         findings = getattr(submission, "findings", []) or []

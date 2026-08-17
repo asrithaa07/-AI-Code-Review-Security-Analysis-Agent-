@@ -1,4 +1,4 @@
-# AI Code Review & Security Analysis Agent - System Architecture
+# Development of Smart Code Inspection Platform with Vulnerability Detection System Group 2 - System Architecture
 
 ## Overview
 This document describes the system architecture for the AI Code Review & Security Analysis Agent, a multi-agent system designed to perform comprehensive code security analysis using RAG (Retrieval-Augmented Generation) and OWASP vulnerability detection.

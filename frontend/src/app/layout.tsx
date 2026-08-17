@@ -8,7 +8,7 @@ import { AuthProvider } from "@/lib/auth-context";
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
-  title: "AI Code Review & Security Analysis Agent",
+  title: "Development of Smart Code Inspection Platform with Vulnerability Detection System Group 2",
   description: "Multi-agent code review platform with RAG-powered secure coding guidance",
 };
 

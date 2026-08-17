@@ -20,7 +20,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="AI Code Review & Security Analysis Agent",
+    title="Development of Smart Code Inspection Platform with Vulnerability Detection System Group 2",
     description="Multi-agent code review platform with RAG-powered secure coding guidance",
     version="0.1.0",
     lifespan=lifespan,
@@ -28,8 +28,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origin_list,
-    allow_origin_regex=r"https?://.*",
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
