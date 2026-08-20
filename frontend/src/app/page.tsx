@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Shield, Sparkles, Terminal, LayoutDashboard, LogIn, LogOut, BookOpen } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Shield, Sparkles, Terminal, LayoutDashboard, LogIn, LogOut } from "lucide-react";
 
 import { CodeSubmissionForm, SubmissionResult } from "@/components/code-submission-form";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -10,15 +10,62 @@ import { Submission } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { AuthModal } from "@/components/auth-modal";
 import { Dashboard } from "@/components/dashboard";
-import { KnowledgeBaseView } from "@/components/knowledge-base-view";
 
 export default function Home() {
-  const { user, logout } = useAuth();
+  const { user, logout, loading } = useAuth();
   const [latestSubmission, setLatestSubmission] = useState<Submission | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [currentView, setCurrentView] = useState<"console" | "dashboard" | "knowledge">("console");
+  const [currentView, setCurrentView] = useState<"console" | "dashboard">("console");
   const [dashboardRefresh, setDashboardRefresh] = useState(0);
-  const [pendingViewAfterAuth, setPendingViewAfterAuth] = useState<"console" | "dashboard" | "knowledge" | null>(null);
+  const [pendingViewAfterAuth, setPendingViewAfterAuth] = useState<"console" | "dashboard" | null>(null);
+  const [isProcessingOAuth, setIsProcessingOAuth] = useState(false);
+  const [oauthError, setOauthError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function handleOAuthCode() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const code = urlParams.get("code");
+      
+      if (code) {
+        setIsProcessingOAuth(true);
+        // Clean up the URL IMMEDIATELY to prevent React Strict Mode from double-firing the network request
+        window.history.replaceState({}, document.title, window.location.pathname);
+        
+        try {
+          const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+          const callbackRes = await fetch(`${API_URL}/api/v1/github/callback`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code: code, username: "asrithaa07" }),
+          });
+          
+          const data = await callbackRes.json();
+          if (callbackRes.ok && data.access_token) {
+            sessionStorage.setItem("spotlight_token", data.access_token);
+            if (data.github_access_token) {
+              sessionStorage.setItem("github_token", data.github_access_token);
+            }
+            window.location.reload();
+          } else {
+            console.error("OAuth login failed", data);
+            setIsProcessingOAuth(false);
+          }
+        } catch (e) {
+          console.error("OAuth callback failed", e);
+          setOauthError("Network error during OAuth");
+          setIsProcessingOAuth(false);
+        }
+      } else if (!loading && !user) {
+        setIsAuthModalOpen(true);
+      }
+    }
+
+    // Only run if we aren't already processing
+    if (!isProcessingOAuth) {
+      handleOAuthCode();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, user]);
 
   const handleDashboardClick = () => {
     if (user) {
@@ -52,29 +99,59 @@ export default function Home() {
     }, 150);
   };
 
+  if (!loading && !user && !isProcessingOAuth) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-4">
+        <div className="mb-8 flex flex-col items-center text-center space-y-3">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 text-white shadow-md shadow-blue-500/20">
+            <Shield className="h-6 w-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Smart Code Inspection Platform</h1>
+            <p className="text-sm text-blue-600 dark:text-blue-400 font-bold tracking-wide">Vulnerability Detection System</p>
+          </div>
+        </div>
+        <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl overflow-hidden shadow-2xl border border-slate-200/50 dark:border-slate-800/50">
+          <AuthModal 
+            isOpen={true} 
+            onClose={() => {}} // Cannot close when forced
+            onSuccess={() => {
+              if (pendingViewAfterAuth) {
+                setCurrentView(pendingViewAfterAuth);
+                setPendingViewAfterAuth(null);
+              } else {
+                window.location.reload();
+              }
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans transition-colors duration-300">
       {/* Navigation Header */}
-      <header className="sticky top-0 z-50 w-full border-b border-slate-200/80 bg-white/80 backdrop-blur-md dark:border-slate-800/85 dark:bg-slate-950/80">
+      <header className="sticky top-0 z-50 w-full border-b border-slate-200/80 bg-white/80 backdrop-blur-md dark:border-slate-800/85 dark:bg-slate-950/80 shadow-sm">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-md shadow-blue-500/10">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 text-white shadow-md shadow-blue-500/20">
               <Shield className="h-5 w-5" />
             </div>
             <div>
               <h1 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">Smart Code Inspection Platform</h1>
-              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Vulnerability Detection System — Group 2</p>
+              <p className="text-xs text-blue-600 dark:text-blue-400 font-bold tracking-wide">Vulnerability Detection System</p>
             </div>
           </div>
 
-          <nav className="hidden md:flex items-center gap-6">
+          <nav className="hidden md:flex items-center gap-2 bg-slate-100/70 dark:bg-slate-900/70 p-1.5 rounded-2xl border border-slate-200/60 dark:border-slate-800/60">
             <button
               type="button"
               onClick={() => { setCurrentView("console"); setTimeout(() => scrollToSection("analysis-portal"), 50); }}
-              className={`text-sm font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+              className={`text-xs font-bold flex items-center gap-2 px-4 py-2 rounded-xl transition-all cursor-pointer ${
                 currentView === "console" 
-                  ? "text-blue-600 dark:text-blue-400" 
-                  : "text-slate-600 hover:text-blue-600 dark:text-slate-300 dark:hover:text-blue-400"
+                  ? "bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm" 
+                  : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
               }`}
             >
               <Terminal className="h-4 w-4" />
@@ -84,27 +161,14 @@ export default function Home() {
             <button
               type="button"
               onClick={handleDashboardClick}
-              className={`text-sm font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+              className={`text-xs font-bold flex items-center gap-2 px-4 py-2 rounded-xl transition-all cursor-pointer ${
                 currentView === "dashboard" 
-                  ? "text-blue-600 dark:text-blue-400" 
-                  : "text-slate-600 hover:text-blue-600 dark:text-slate-300 dark:hover:text-blue-400"
+                  ? "bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm" 
+                  : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
               }`}
             >
               <LayoutDashboard className="h-4 w-4" />
               User Dashboard
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setCurrentView("knowledge")}
-              className={`text-sm font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
-                currentView === "knowledge" 
-                  ? "text-blue-600 dark:text-blue-400" 
-                  : "text-slate-600 hover:text-blue-600 dark:text-slate-300 dark:hover:text-blue-400"
-              }`}
-            >
-              <BookOpen className="h-4 w-4" />
-              Knowledge Base
             </button>
           </nav>
 
@@ -128,16 +192,7 @@ export default function Home() {
                   Logout
                 </Button>
               </div>
-            ) : (
-              <Button 
-                type="button"
-                onClick={() => setIsAuthModalOpen(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl shadow-md shadow-blue-500/10 cursor-pointer"
-              >
-                <LogIn className="mr-1.5 h-4 w-4" />
-                Login / Signup
-              </Button>
-            )}
+            ) : null}
           </div>
         </div>
 
@@ -146,7 +201,7 @@ export default function Home() {
           <button
             type="button"
             onClick={() => { setCurrentView("console"); setTimeout(() => scrollToSection("analysis-portal"), 50); }}
-            className={`py-1 px-3 rounded-lg cursor-pointer whitespace-nowrap ${currentView === "console" ? "bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm" : "text-slate-600 dark:text-slate-400"}`}
+            className={`py-1.5 px-4 rounded-lg cursor-pointer whitespace-nowrap font-bold ${currentView === "console" ? "bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm" : "text-slate-600 dark:text-slate-400"}`}
           >
             Scanner
           </button>
@@ -154,69 +209,69 @@ export default function Home() {
           <button
             type="button"
             onClick={handleDashboardClick}
-            className={`py-1 px-3 rounded-lg cursor-pointer whitespace-nowrap ${currentView === "dashboard" ? "bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm" : "text-slate-600 dark:text-slate-400"}`}
+            className={`py-1.5 px-4 rounded-lg cursor-pointer whitespace-nowrap font-bold ${currentView === "dashboard" ? "bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm" : "text-slate-600 dark:text-slate-400"}`}
           >
             Dashboard
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setCurrentView("knowledge")}
-            className={`py-1 px-3 rounded-lg cursor-pointer whitespace-nowrap ${currentView === "knowledge" ? "bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm" : "text-slate-600 dark:text-slate-400"}`}
-          >
-            Knowledge
           </button>
         </div>
       </header>
 
-      {/* Hero Section */}
-      <section className="relative overflow-hidden py-16 lg:py-24 bg-gradient-to-b from-slate-100 to-slate-50 dark:from-slate-950 dark:to-slate-900 border-b border-slate-200/50 dark:border-slate-800/30">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(59,130,246,0.06),transparent_50%)] pointer-events-none"></div>
-        <div className="mx-auto max-w-7xl px-6 relative z-10 text-center space-y-6">
-          <div className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-semibold bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border border-blue-100 dark:border-blue-900/50">
-            <Sparkles className="h-3.5 w-3.5" />
-            Development of Smart Code Inspection Platform (Group 2)
+      {/* Hero Section - Compact when submission results are present */}
+      {!latestSubmission ? (
+        <section className="relative overflow-hidden py-10 lg:py-14 bg-gradient-to-b from-slate-100 via-blue-50/20 to-slate-50 dark:from-slate-950 dark:via-blue-950/10 dark:to-slate-900 border-b border-slate-200/50 dark:border-slate-800/30">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(59,130,246,0.08),transparent_60%)] pointer-events-none"></div>
+          <div className="mx-auto max-w-7xl px-6 relative z-10 text-center space-y-4">
+            <div className="inline-flex items-center gap-2 rounded-full px-3.5 py-1 text-xs font-bold bg-blue-100/80 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300 border border-blue-200/80 dark:border-blue-900/60 shadow-sm">
+              <Sparkles className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+              Smart Code Inspection Platform
+            </div>
+            <h2 className="mx-auto max-w-4xl text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-slate-900 dark:text-white leading-tight">
+              Automated Code Quality &amp;{" "}
+              <span className="bg-gradient-to-r from-blue-600 via-indigo-500 to-purple-600 bg-clip-text text-transparent">
+                Security Intelligence
+              </span>
+            </h2>
+            <p className="mx-auto max-w-2xl text-sm sm:text-base text-slate-600 dark:text-slate-300 font-medium leading-relaxed">
+              Validate Python and Java source code against secure coding guidelines, OWASP Top 10 vulnerabilities, and standard code smell patterns with interactive remediation.
+            </p>
           </div>
-          <h2 className="mx-auto max-w-4xl text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-slate-900 dark:text-white leading-[1.1]">
-            Automated Code Quality &amp;{" "}
-            <span className="bg-gradient-to-r from-blue-600 to-indigo-500 bg-clip-text text-transparent">
-              Security Intelligence
-            </span>
-          </h2>
-          <p className="mx-auto max-w-2xl text-base sm:text-lg text-slate-600 dark:text-slate-400 font-normal leading-relaxed">
-            Validate Python and Java source code against secure coding guidelines, OWASP Top 10 vulnerabilities, and standard code smell patterns with interactive side-by-side remediation.
-          </p>
-          <div className="flex flex-wrap items-center justify-center gap-4 pt-2">
-            <Button
-              onClick={() => { setCurrentView("console"); setTimeout(() => scrollToSection("analysis-portal"), 50); }}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-lg shadow-blue-500/20 px-8 py-6 rounded-xl transition-all hover:scale-[1.02] cursor-pointer"
-            >
-              Start Security Scan
-            </Button>
-          </div>
-        </div>
-      </section>
+        </section>
+      ) : null}
 
       {/* Main Content Area */}
-      <main className="mx-auto max-w-7xl px-6 py-12 space-y-16">
+      <main className="mx-auto max-w-7xl px-4 sm:px-6 py-6 space-y-8">
         
         {currentView === "console" && (
-          <section id="analysis-portal" className="space-y-8 scroll-mt-24">
-            <div className="flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400">
-                <Terminal className="h-4 w-4" />
+          <section id="analysis-portal" className="space-y-6 scroll-mt-20">
+            {!latestSubmission && (
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400 border border-blue-200 dark:border-blue-900">
+                  <Terminal className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">Analysis Console</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Submit source code snippets or upload files for multi-agent security analysis</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Analysis Console</h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400">Submit code snippets or upload files for syntax validation</p>
-              </div>
-            </div>
+            )}
 
-            <div className="space-y-10">
-              <CodeSubmissionForm onSubmissionComplete={handleSubmissionComplete} />
+            <div className="space-y-6">
+              {!latestSubmission && (
+                <CodeSubmissionForm onSubmissionComplete={handleSubmissionComplete} />
+              )}
 
               {latestSubmission && (
-                <div id="results-section" className="scroll-mt-24 animate-in fade-in slide-in-from-bottom-6 duration-500">
+                <div id="results-section" className="scroll-mt-20 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                  <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-200 dark:border-slate-800">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setLatestSubmission(null)}
+                      className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 flex items-center gap-1.5 p-0 h-auto"
+                    >
+                      &larr; Submit New Code / Edit Submission
+                    </Button>
+                  </div>
                   <SubmissionResult submission={latestSubmission} />
                 </div>
               )}
@@ -230,10 +285,6 @@ export default function Home() {
             refreshTrigger={dashboardRefresh} 
           />
         )}
-
-        {currentView === "knowledge" && (
-          <KnowledgeBaseView />
-        )}
       </main>
 
       {/* Footer */}
@@ -241,31 +292,16 @@ export default function Home() {
         <div className="mx-auto max-w-7xl px-6 space-y-4">
           <div className="flex items-center justify-center gap-2">
             <Shield className="h-5 w-5 text-blue-600" />
-            <span className="font-bold text-slate-900 dark:text-white">Smart Code Inspection Platform (Group 2)</span>
+            <span className="font-bold text-slate-900 dark:text-white">Smart Code Inspection Platform</span>
           </div>
           <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto">
-            High-performance code scanner integrated with a secure-coding RAG pipeline for FastAPI + LangGraph.
+            High-performance multi-agent code scanner with secure-coding remediation engine.
           </p>
           <div className="pt-4 text-xs text-slate-400 dark:text-slate-600 font-medium">
-            &copy; {new Date().getFullYear()} Smart Code Inspection Platform Group 2. All rights reserved.
+            &copy; {new Date().getFullYear()} Smart Code Inspection Platform. All rights reserved.
           </div>
         </div>
       </footer>
-
-      {/* Modals */}
-      <AuthModal 
-        isOpen={isAuthModalOpen} 
-        onClose={() => {
-          setIsAuthModalOpen(false);
-          setPendingViewAfterAuth(null);
-        }}
-        onSuccess={() => {
-          if (pendingViewAfterAuth) {
-            setCurrentView(pendingViewAfterAuth);
-            setPendingViewAfterAuth(null);
-          }
-        }}
-      />
     </div>
   );
 }

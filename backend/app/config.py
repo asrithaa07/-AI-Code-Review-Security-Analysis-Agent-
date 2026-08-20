@@ -21,6 +21,15 @@ class Settings(BaseSettings):
     embedding_model: str = "BAAI/bge-small-en-v1.5"
 
     gemini_api_key: str = ""
+    portkey_api_key: str = ""
+    portkey_backup_gemini_key: str = ""
+    portkey_virtual_key: str = ""
+    github_client_id: str = ""
+    github_client_secret: str = ""
+    github_redirect_uri: str = "http://localhost:3000/auth/github/callback"
+    logfire_token: str = ""
+    langsmith_api_key: str = ""
+    enable_observability: bool = True
     llm_model: str = "gemini-2.0-flash"
     secret_key: str = "super-secret-key-for-development-spotlight-ai"
     access_token_expire_minutes: int = 10080  # 7 days in minutes

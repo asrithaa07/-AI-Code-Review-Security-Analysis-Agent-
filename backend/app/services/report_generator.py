@@ -267,49 +267,6 @@ class ReportGenerator:
                 story.append(f_table)
                 story.append(Spacer(1, 10))
 
-        # Fully Remediated Source Code (Ready to Use)
-        full_code = (submission.pr_summary or {}).get("full_remediated_code")
-        if full_code:
-            story.append(Spacer(1, 10))
-            story.append(Paragraph("Fully Remediated & Refactored Source Code (Production Ready)", subtitle_style))
-            story.append(Spacer(1, 5))
-
-            rem_lines = full_code.splitlines()
-            CHUNK_SIZE = 30
-            for chunk_idx in range(0, len(rem_lines), CHUNK_SIZE):
-                chunk = rem_lines[chunk_idx : chunk_idx + CHUNK_SIZE]
-                numbered_chunk = "\n".join(f"{chunk_idx + i + 1:3d} | {html.escape(line)}" for i, line in enumerate(chunk))
-                chunk_table = Table([[Preformatted(numbered_chunk, code_style)]], colWidths=[540])
-                chunk_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#022c22")),
-                    ('PADDING', (0, 0), (-1, -1), 8),
-                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                    ('BOX', (0, 0), (-1, -1), 1, colors.HexColor("#065f46")),
-                ]))
-                story.append(chunk_table)
-                story.append(Spacer(1, 4))
-
-        # Submitted Code Listing
-        story.append(Spacer(1, 10))
-        story.append(Paragraph("Submitted Code Listing", subtitle_style))
-        story.append(Spacer(1, 5))
-
-        lines = submission.source_code.splitlines()
-        CHUNK_SIZE = 30
-        for chunk_idx in range(0, len(lines), CHUNK_SIZE):
-            chunk = lines[chunk_idx : chunk_idx + CHUNK_SIZE]
-            numbered_chunk = "\n".join(f"{chunk_idx + i + 1:3d} | {html.escape(line)}" for i, line in enumerate(chunk))
-            chunk_table = Table([[Preformatted(numbered_chunk, code_style)]], colWidths=[540])
-            chunk_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#0f172a")),
-                ('PADDING', (0, 0), (-1, -1), 8),
-                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                ('BOX', (0, 0), (-1, -1), 1, colors.HexColor("#1e293b")),
-            ]))
-            story.append(chunk_table)
-            story.append(Spacer(1, 4))
 
         doc.build(story)
         pdf_bytes = buffer.getvalue()
@@ -379,15 +336,6 @@ class ReportGenerator:
                 if f.get('best_practice_explanation'):
                     md.append(f"> **Best Practice:** {f.get('best_practice_explanation')}\n")
 
-        full_code = (submission.pr_summary or {}).get("full_remediated_code")
-        if full_code:
-            code_lang = submission.language.value if submission.language else 'text'
-            md.append("## Fully Remediated & Refactored Source Code (Production Ready)\n")
-            md.append(f"```{code_lang}\n{full_code}\n```\n")
-
-        md.append("## Submitted Source Code\n")
-        code_lang = submission.language.value if submission.language else 'text'
-        md.append(f"```{code_lang}\n{submission.source_code}\n```")
 
         return "\n".join(md)
 

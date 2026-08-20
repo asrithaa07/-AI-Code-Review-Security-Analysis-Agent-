@@ -104,7 +104,7 @@ export function ConversationalAssistant({ submissionId, initialFindingQuery }: C
     {
       id: "welcome-msg",
       sender: "assistant",
-      text: "Hello! I am your RAG-powered Conversational Code Assistant. Ask me follow-up questions about flagged OWASP vulnerabilities, refactoring techniques, or secure coding best practices.",
+      text: "Hello! I am your ChatGPT-grade Conversational Secure Coding & Architecture Assistant. Ask me any question about code, OWASP Top 10 standards, SQL injection, syntax errors, code quality refactoring, or your code submission findings.",
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     },
   ]);
@@ -173,9 +173,11 @@ export function ConversationalAssistant({ submissionId, initialFindingQuery }: C
 
   const suggestionChips = [
     "Explain SQL Injection & parameterized query fix",
+    "What are OWASP Top 10 A01-A10 security categories?",
+    "How do guard clauses fix the Arrow Anti-Pattern?",
     "How to securely store API keys & secrets?",
-    "What are OWASP A01 Access Control guidelines?",
-    "How do guard clauses reduce code complexity?",
+    "How to heal syntax & delimiter errors in code?",
+    "Explain issues in my submitted code scan",
   ];
 
   return (

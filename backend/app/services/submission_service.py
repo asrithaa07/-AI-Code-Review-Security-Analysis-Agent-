@@ -1,9 +1,24 @@
+import textwrap
 from uuid import UUID
 
 from sqlalchemy.orm import Session
 
 from app.models.submission import CodeSubmission, Language, SubmissionStatus, SubmissionType
 from app.services.code_validator import validate_source_code
+
+
+def normalize_input_code(source_code: str) -> str:
+    if not source_code:
+        return ""
+    code = source_code.replace("\r\n", "\n").replace("\r", "\n")
+    lines = code.split("\n")
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    while lines and not lines[-1].strip():
+        lines.pop()
+    if not lines:
+        return ""
+    return textwrap.dedent("\n".join(lines))
 
 
 class SubmissionService:
@@ -15,6 +30,7 @@ class SubmissionService:
         filename: str | None = None,
         user_id: UUID | None = None,
     ) -> CodeSubmission:
+        source_code = normalize_input_code(source_code)
         validation = validate_source_code(source_code, language)
         submission = CodeSubmission(
             user_id=user_id,
@@ -39,6 +55,7 @@ class SubmissionService:
         filename: str,
         user_id: UUID | None = None,
     ) -> CodeSubmission:
+        source_code = normalize_input_code(source_code)
         validation = validate_source_code(source_code, language)
         submission = CodeSubmission(
             user_id=user_id,

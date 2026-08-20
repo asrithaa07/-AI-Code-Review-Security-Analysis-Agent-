@@ -39,16 +39,35 @@ def validate_python(source_code: str) -> ValidationResult:
     return ValidationResult(is_valid=len(errors) == 0, errors=errors)
 
 
+import re
+
 def validate_java(source_code: str) -> ValidationResult:
     errors: list[dict] = []
+    
+    # Auto-fix common minor syntax typos (e.g., missing '(' in if/else if)
+    fixed_code = source_code
+    if "system.out" in fixed_code:
+        fixed_code = fixed_code.replace("system.out", "System.out")
+    if "system.err" in fixed_code:
+        fixed_code = fixed_code.replace("system.err", "System.err")
+        
+    fixed_code = re.sub(r"\b(else\s+if|if)\s+([^(\n]+?\)\s*\{)", r"\1 (\2", fixed_code)
+
+    # Wrap code snippet in class if missing class declaration
+    code_to_parse = fixed_code
+    if "class " not in fixed_code:
+        if any(kw in fixed_code for kw in ["public ", "private ", "protected ", "static ", "void ", "int ", "boolean ", "String "]):
+            code_to_parse = f"public class SnippetWrapper {{\n{fixed_code}\n}}"
+        else:
+            code_to_parse = f"public class SnippetWrapper {{\n    public void snippetMethod() {{\n{fixed_code}\n    }}\n}}"
+
     try:
-        javalang.parse.parse(source_code)
+        javalang.parse.parse(code_to_parse)
     except javalang.parser.JavaSyntaxError as exc:
         # javalang error structure: exc.at is a token with position info
         line = None
         column = None
         if hasattr(exc, 'at') and exc.at:
-            # Try to get line/column from the token
             if hasattr(exc.at, 'line'):
                 line = exc.at.line
             if hasattr(exc.at, 'column'):
@@ -105,41 +124,31 @@ def detect_language(source_code: str, filename: str | None = None) -> Language:
     if not code:
         return Language.python
 
-    py_valid = validate_python(code).is_valid
-    java_valid = validate_java(code).is_valid
-
-    if py_valid and not java_valid:
-        return Language.python
-    if java_valid and not py_valid:
-        return Language.java
-
-    # Heuristic scoring
-    java_score = 0
-    python_score = 0
-
+    # Heuristic indicator lists
     java_indicators = [
         "public class ", "private ", "protected ", "public static void ",
-        "System.out.print", "package ", "import java.", "import javax.",
-        "String[] ", "void ", "int ", "double ", "boolean ", "@Override",
-        "throws ", "implements ", "extends "
+        "System.out.print", "package ", "import java.", "import javax.", "import org.",
+        "import com.", "import jakarta.", "String[] ", "void ", "int ", "double ",
+        "boolean ", "@Override", "throws ", "implements ", "extends ", "PreparedStatement ",
+        "ResultSet ", "Connection ", "DriverManager.", "MessageDigest"
     ]
-    for ind in java_indicators:
-        java_score += code.count(ind) * 2
+    
+    python_indicators = [
+        "def ", "from ", "elif ", "self.", "__init__",
+        "print(", "if __name__ ==", "def __", "pass", "None",
+        "True", "False", "lambda ", "raise ", "except ", "finally:"
+    ]
+
+    java_score = sum(code.count(ind) * 2 for ind in java_indicators)
+    python_score = sum(code.count(ind) * 2 for ind in python_indicators)
 
     lines = [line.strip() for line in code.split("\n") if line.strip()]
     semicolon_lines = sum(1 for line in lines if line.endswith(";"))
     curly_braces = code.count("{") + code.count("}")
-    if lines and (semicolon_lines / len(lines) > 0.3):
-        java_score += 5
-    java_score += curly_braces
 
-    python_indicators = [
-        "def ", "import ", "from ", "elif ", "self.", "__init__",
-        "print(", "if __name__ ==", "def __", "pass", "None",
-        "True", "False", "lambda ", "raise ", "except ", "finally:"
-    ]
-    for ind in python_indicators:
-        python_score += code.count(ind) * 2
+    if lines and (semicolon_lines / len(lines) > 0.2):
+        java_score += 10
+    java_score += curly_braces
 
     colon_lines = sum(1 for line in lines if line.endswith(":"))
     comment_lines = sum(1 for line in lines if line.startswith("#"))
@@ -147,7 +156,67 @@ def detect_language(source_code: str, filename: str | None = None) -> Language:
         python_score += 4
     python_score += comment_lines * 2
 
+    # Check for generic Python 'import ' that does not look like Java import
+    py_import_count = sum(1 for line in lines if line.startswith("import ") and not line.endswith(";") and not any(p in line for p in ["java.", "javax.", "org.", "com.", "jakarta."]))
+    python_score += py_import_count * 2
+
+    py_valid = validate_python(code).is_valid
+    java_valid = validate_java(code).is_valid
+
     if java_score > python_score:
         return Language.java
+    if python_score > java_score:
+        return Language.python
+
+    if py_valid and not java_valid:
+        return Language.python
+    if java_valid and not py_valid:
+        return Language.java
+
     return Language.python
+
+
+def validate_javascript(source_code: str) -> ValidationResult:
+    """Basic JS/TS syntax balance validation."""
+    errors = []
+    stack = []
+    pairs = {')': '(', '}': '{', ']': '['}
+    
+    for idx, char in enumerate(source_code, start=1):
+        if char in "({[":
+            stack.append(char)
+        elif char in ")}]" :
+            if not stack or stack[-1] != pairs[char]:
+                errors.append({
+                    "line": 1,
+                    "column": idx,
+                    "message": f"Mismatched closing bracket '{char}'",
+                    "severity": "critical",
+                    "category": "syntax_error"
+                })
+                break
+            stack.pop()
+
+    if stack and not errors:
+        errors.append({
+            "line": 1,
+            "column": len(source_code),
+            "message": f"Unclosed bracket '{stack[-1]}'",
+            "severity": "critical",
+            "category": "syntax_error"
+        })
+
+    return ValidationResult(is_valid=len(errors) == 0, errors=errors)
+
+
+def validate_code(source_code: str, language: str) -> ValidationResult:
+    """Unified multi-language syntax validator."""
+    lang_str = str(language).lower()
+    if lang_str == "java":
+        return validate_java(source_code)
+    elif lang_str in ["javascript", "typescript", "js", "ts"]:
+        return validate_javascript(source_code)
+    elif lang_str == "python":
+        return validate_python(source_code)
+    return validate_python(source_code)
 

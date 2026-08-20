@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Finding } from "@/lib/api";
 
+import { SecurityRadarChart } from "@/components/security-radar-chart";
+
 interface SecurityMatrixProps {
   findings: Finding[];
   onSelectOwaspCategory?: (categoryCode: string) => void;
@@ -178,6 +180,8 @@ export function SecurityMatrix({ findings, onSelectOwaspCategory }: SecurityMatr
       </CardHeader>
 
       <CardContent className="p-6 space-y-6">
+
+
         {/* Heatmap Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           {OWASP_TOP_10_2021.map((item) => {

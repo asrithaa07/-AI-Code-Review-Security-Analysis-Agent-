@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SecurityRadarChart } from "@/components/security-radar-chart";
 
 interface DashboardProps {
   onSelectSubmission: (submission: Submission) => void;
@@ -209,6 +210,21 @@ export function Dashboard({ onSelectSubmission, refreshTrigger }: DashboardProps
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Security Risk Profile Radar Chart */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5 text-blue-500" />
+            Security Posture Radar Profile
+          </h3>
+          <span className="text-xs text-slate-500">Multidimensional security & code quality scoring</span>
+        </div>
+        <SecurityRadarChart
+          findings={submissions.flatMap((s) => s.findings || [])}
+          healthScore={avgHealthScore}
+        />
       </div>
 
       {/* Review History Panel with Filters */}

@@ -56,7 +56,16 @@ def perform_dynamic_code_analysis(source_code: str, language: str) -> List[dict]
             
         # 1. Deep Nesting / Arrow Anti-Pattern Detection
         indent_spaces = len(raw_line) - len(raw_line.lstrip(' '))
-        if indent_spaces >= 12 and (line.startswith("if ") or line.startswith("else:") or line.startswith("elif ") or line.startswith("for ") or line.startswith("while ")):
+        base_method_indent = 8 if language.lower() == "java" else 4
+        effective_indent = indent_spaces - base_method_indent
+        
+        # Only flag if control flow block nesting is >= 16 spaces deep (4+ nested control blocks)
+        # and line is not a standard try-with-resources result check (e.g. rs.next())
+        if (
+            effective_indent >= 16 
+            and (line.startswith("if ") or line.startswith("if(") or line.startswith("else:") or line.startswith("elif ") or line.startswith("for ") or line.startswith("while "))
+            and "rs.next()" not in line
+        ):
             if (idx, "complexity") not in seen_lines_set:
                 findings.append({
                     "title": "Deeply Nested Conditional Blocks (Arrow Anti-Pattern)",

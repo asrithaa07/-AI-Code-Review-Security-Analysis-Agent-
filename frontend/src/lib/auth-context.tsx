@@ -19,10 +19,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Load user profile if token is in localStorage
+  // Load user profile if token is in sessionStorage
   useEffect(() => {
     async function loadUser() {
-      const storedToken = localStorage.getItem("spotlight_token");
+      // CLEAR localStorage just in case they have an old lingering token
+      localStorage.removeItem("spotlight_token");
+      
+      const storedToken = sessionStorage.getItem("spotlight_token");
       if (storedToken) {
         setToken(storedToken);
         try {
@@ -33,7 +36,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const err = error as { status?: number; message?: string };
           // Only clear stored token if the backend explicitly returned a 401 Unauthorized response
           if (err?.status === 401 || err?.message?.includes("401") || err?.message?.includes("Unauthorized")) {
-            localStorage.removeItem("spotlight_token");
+            sessionStorage.removeItem("spotlight_token");
             setToken(null);
             setUser(null);
           }
@@ -47,7 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (username: string, password: string) => {
     try {
       const res = await loginUser({ username, password });
-      localStorage.setItem("spotlight_token", res.access_token);
+      sessionStorage.setItem("spotlight_token", res.access_token);
       setToken(res.access_token);
       setUser(res.user);
     } catch (error) {
@@ -58,7 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signup = async (username: string, password: string) => {
     try {
       const res = await signupUser({ username, password });
-      localStorage.setItem("spotlight_token", res.access_token);
+      sessionStorage.setItem("spotlight_token", res.access_token);
       setToken(res.access_token);
       setUser(res.user);
     } catch (error) {
@@ -67,7 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = () => {
-    localStorage.removeItem("spotlight_token");
+    sessionStorage.removeItem("spotlight_token");
     setToken(null);
     setUser(null);
   };

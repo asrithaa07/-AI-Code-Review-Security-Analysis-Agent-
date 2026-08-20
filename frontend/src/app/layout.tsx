@@ -1,14 +1,10 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
-import { cn } from "@/lib/utils";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/lib/auth-context";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
-
 export const metadata: Metadata = {
-  title: "Development of Smart Code Inspection Platform with Vulnerability Detection System Group 2",
+  title: "Smart Code Inspection Platform — Vulnerability Detection System",
   description: "Multi-agent code review platform with RAG-powered secure coding guidance",
 };
 
@@ -18,11 +14,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={cn("font-sans", inter.variable)} suppressHydrationWarning>
-      <body className="antialiased">
+    <html lang="en" className="font-sans dark" suppressHydrationWarning>
+      <body className="antialiased min-h-screen bg-slate-950 text-slate-100">
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
+          defaultTheme="dark"
           enableSystem
           disableTransitionOnChange
         >
@@ -34,3 +30,4 @@ export default function RootLayout({
     </html>
   );
 }
+

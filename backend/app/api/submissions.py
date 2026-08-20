@@ -22,7 +22,7 @@ MAX_FILE_SIZE = 500_000  # 500 KB
 
 
 @router.post("/paste", response_model=SubmissionResponse, status_code=201)
-def submit_paste(
+async def submit_paste(
     payload: PasteSubmissionRequest,
     background_tasks: BackgroundTasks,
     current_user: User | None = Depends(get_current_user_optional),

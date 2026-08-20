@@ -39,6 +39,18 @@ export interface PRSummary {
     action_item: string;
   }>;
   full_remediated_code?: string | null;
+  self_healing_metadata?: {
+    rescan_passed: boolean;
+    remediation_status?: string | null;
+    security_remediation_required?: boolean | null;
+    remediation_error?: string | null;
+    original_findings_count: number;
+    rescan_findings_count: number;
+    fixed_findings_count: number;
+    fixed_findings: string[];
+    remaining_findings: Finding[];
+    attempts: number;
+  } | null;
 }
 
 export interface Submission {
@@ -95,7 +107,7 @@ export interface RetrievedChunk {
 function getHeaders(extraHeaders: Record<string, string> = {}): Record<string, string> {
   const headers: Record<string, string> = { ...extraHeaders };
   if (typeof window !== "undefined") {
-    const token = localStorage.getItem("spotlight_token");
+    const token = sessionStorage.getItem("spotlight_token");
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
     }
@@ -163,7 +175,7 @@ export async function submitUpload(file: File): Promise<Submission> {
 }
 
 export async function getMySubmissions(skip = 0, limit = 50): Promise<{ items: Submission[]; total: number }> {
-  const token = typeof window !== "undefined" ? localStorage.getItem("spotlight_token") : null;
+  const token = typeof window !== "undefined" ? sessionStorage.getItem("spotlight_token") : null;
   const url = token 
     ? `${API_URL}/api/v1/submissions/my-submissions?skip=${skip}&limit=${limit}`
     : `${API_URL}/api/v1/submissions?skip=${skip}&limit=${limit}`;

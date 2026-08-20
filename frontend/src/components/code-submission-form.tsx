@@ -2,7 +2,8 @@
 
 import { useRef, useState, useEffect } from "react";
 import { 
-  AlertCircle, 
+  AlertCircle,
+  AlertTriangle,
   CheckCircle2, 
   Loader2, 
   Upload, 
@@ -33,81 +34,13 @@ import { SeverityPieChart } from "@/components/severity-pie-chart";
 import { CodeDiffViewer } from "@/components/code-diff-viewer";
 import { SecurityMatrix } from "@/components/security-matrix";
 import { AgentPipelineVisualizer } from "@/components/agent-pipeline-visualizer";
+import { SecurityRadarChart } from "@/components/security-radar-chart";
 
 interface CodeSubmissionFormProps {
   onSubmissionComplete: (submission: Submission) => void;
 }
 
-const PRESET_SAMPLES = [
-  {
-    label: "🐍 SQLi & Secret (Python)",
-    lang: "python",
-    filename: "auth_service.py",
-    code: `import sqlite3
 
-API_KEY = "sk-live-secret-key-9920112"
-
-def get_user_profile(user_id):
-    conn = sqlite3.connect("users.db")
-    cursor = conn.cursor()
-    # OWASP A03: SQL Injection Vulnerability
-    query = f"SELECT * FROM users WHERE id = '{user_id}' AND is_active = 1"
-    cursor.execute(query)
-    return cursor.fetchone()
-`,
-  },
-  {
-    label: "🐍 Complexity Smell (Python)",
-    lang: "python",
-    filename: "order_processor.py",
-    code: `def process_orders(orders):
-    results = []
-    # High cyclomatic complexity anti-pattern & deep nesting
-    for o in orders:
-        if o != None:
-            if o.get("status") == "pending":
-                if o.get("total") > 100:
-                    if o.get("customer") != None:
-                        if o["customer"].get("is_verified") == True:
-                            results.append(o)
-                        else:
-                            pass
-    return results
-`,
-  },
-  {
-    label: "☕ Raw SQL & Hardcoded Auth (Java)",
-    lang: "java",
-    filename: "AuthManager.java",
-    code: `public class AuthManager {
-    private static final String AWS_SECRET = "AKIAIOSFODNN7EXAMPLE";
-
-    public User authenticate(String username, String password) {
-        // OWASP A03 SQL Injection
-        String query = "SELECT * FROM accounts WHERE user='" + username + "' AND pass='" + password + "'";
-        Statement stmt = connection.createStatement();
-        ResultSet rs = stmt.executeQuery(query);
-        return parseUser(rs);
-    }
-}
-`,
-  },
-  {
-    label: "☕ Insecure Deserialization (Java)",
-    lang: "java",
-    filename: "DataHandler.java",
-    code: `import java.io.*;
-
-public class DataHandler {
-    public Object readUserSession(byte[] rawData) throws Exception {
-        // OWASP A08: Insecure Deserialization vulnerability
-        ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(rawData));
-        return in.readObject();
-    }
-}
-`,
-  },
-];
 
 
 export function CodeSubmissionForm({ onSubmissionComplete }: CodeSubmissionFormProps) {
@@ -118,13 +51,142 @@ export function CodeSubmissionForm({ onSubmissionComplete }: CodeSubmissionFormP
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // GitHub Repo State
+  const [repoUrl, setRepoUrl] = useState("https://github.com/security-lab/sample-vulnerable-repo");
+  const [repoBranch, setRepoBranch] = useState("main");
+  const [repoFilePath, setRepoFilePath] = useState("");
+  const [repoFiles, setRepoFiles] = useState<Array<{ name: string; path: string; size?: number }>>([]);
+  const [isFetchingFiles, setIsFetchingFiles] = useState(false);
+  const [userRepos, setUserRepos] = useState<Array<{ id: number; name: string; full_name: string; html_url: string; default_branch: string }>>([]);
+  const [isLoadingRepos, setIsLoadingRepos] = useState(false);
+
+  useEffect(() => {
+    const fetchUserRepos = async () => {
+      setIsLoadingRepos(true);
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+        const token = typeof window !== "undefined" ? sessionStorage.getItem("spotlight_token") : null;
+        const ghToken = typeof window !== "undefined" ? sessionStorage.getItem("github_token") : null;
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+
+        const queryParams = ghToken ? `?github_token=${ghToken}` : '';
+        const res = await fetch(`${API_URL}/api/v1/github/repos${queryParams}`, { 
+          cache: "no-store",
+          headers: {
+            ...headers,
+            'Pragma': 'no-cache',
+            'Cache-Control': 'no-cache'
+          }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            setUserRepos(data);
+            const firstUrl = data[0].html_url || `https://github.com/${data[0].full_name}`;
+            setRepoUrl(firstUrl);
+            if (data[0].default_branch) setRepoBranch(data[0].default_branch);
+            handleFetchRepoContentsForUrl(firstUrl);
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching user repos:", err);
+      } finally {
+        setIsLoadingRepos(false);
+      }
+    };
+    fetchUserRepos();
+  }, []);
+
+  const handleFetchRepoContentsForUrl = async (targetUrl: string) => {
+    if (!targetUrl.trim()) return;
+    setIsFetchingFiles(true);
+    setError(null);
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const token = typeof window !== "undefined" ? sessionStorage.getItem("spotlight_token") : null;
+      const ghToken = typeof window !== "undefined" ? sessionStorage.getItem("github_token") : null;
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const res = await fetch(`${API_URL}/api/v1/github/repo-contents`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          repo_url: targetUrl,
+          branch: repoBranch || "main",
+          github_token: ghToken
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to fetch repository files");
+      const data = await res.json();
+      if (data.files && data.files.length > 0) {
+        setRepoFiles(data.files);
+        setRepoFilePath(data.files[0].path);
+      } else {
+        setRepoFiles([]);
+        setRepoFilePath("");
+        setError("No Java (.java) or Python (.py) code present to analyse in this repository.");
+      }
+    } catch (e) {
+      setError("Unable to list repository files. You can enter the target file path directly.");
+    } finally {
+      setIsFetchingFiles(false);
+    }
+  };
+
+  const handleFetchRepoContents = async () => {
+    await handleFetchRepoContentsForUrl(repoUrl);
+  };
+
+  const handleGitHubRepoSubmit = async () => {
+    if (!repoUrl.trim()) {
+      setError("Please provide a valid GitHub Repository URL or owner/repo.");
+      return;
+    }
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const token = typeof window !== "undefined" ? sessionStorage.getItem("spotlight_token") : null;
+      const ghToken = typeof window !== "undefined" ? sessionStorage.getItem("github_token") : null;
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const res = await fetch(`${API_URL}/api/v1/github/analyze-repo`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          repo_url: repoUrl,
+          branch: repoBranch || "main",
+          file_path: repoFilePath || undefined,
+          github_token: ghToken
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || "Failed to analyze GitHub repository");
+      }
+
+      const data = await res.json();
+      // Fetch full submission details and notify parent
+      const submissionDetails = await getSubmissionDetails(data.submission_id);
+      onSubmissionComplete(submissionDetails);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "GitHub analysis failed");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   // Client-side quick auto-detection for visual preview
   const autoDetectedLanguage: Language = (() => {
     if (filename.toLowerCase().endsWith(".py")) return "python";
     if (filename.toLowerCase().endsWith(".java")) return "java";
     const code = sourceCode.toLowerCase();
-    const javaScore = (code.match(/public class|system\.out|public static void|import java\.|void |string\[\]/g) || []).length;
-    const pyScore = (code.match(/def |import |from |elif |self\.|print\(/g) || []).length;
+    const javaScore = (code.match(/public class|private |protected |system\.out|public static void|import java\.|import org\.|import javax\.|import com\.|void |string\[\]|throws |implements |extends |preparedstatement|resultset|drivermanager|messagedigest|;\s*$/gm) || []).length;
+    const pyScore = (code.match(/def |from [a-z0-9_]+ import|elif |self\.|print\(|__init__|:\s*$/gm) || []).length;
     return javaScore > pyScore ? "java" : "python";
   })();
 
@@ -141,6 +203,8 @@ export function CodeSubmissionForm({ onSubmissionComplete }: CodeSubmissionFormP
         filename: filename || undefined,
       });
       onSubmissionComplete(submission);
+      setSourceCode("");
+      setFilename("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Submission failed");
     } finally {
@@ -199,9 +263,15 @@ export function CodeSubmissionForm({ onSubmissionComplete }: CodeSubmissionFormP
       </CardHeader>
       <CardContent className="p-6">
         <Tabs defaultValue="paste" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 p-1 bg-slate-100 dark:bg-slate-950 rounded-xl">
+          <TabsList className="grid w-full grid-cols-3 p-1 bg-slate-100 dark:bg-slate-950 rounded-xl">
             <TabsTrigger value="paste" className="rounded-lg font-semibold py-2.5 transition-all">Paste Code</TabsTrigger>
             <TabsTrigger value="upload" className="rounded-lg font-semibold py-2.5 transition-all">Upload File</TabsTrigger>
+            <TabsTrigger value="github" className="rounded-lg font-semibold py-2.5 transition-all flex items-center justify-center gap-1.5">
+              <svg className="h-4 w-4 fill-current" viewBox="0 0 24 24">
+                <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+              </svg>
+              GitHub Repo
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="paste" className="mt-6 space-y-6">
@@ -230,23 +300,7 @@ export function CodeSubmissionForm({ onSubmissionComplete }: CodeSubmissionFormP
               <div className="space-y-2">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <Label htmlFor="source-code" className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Source Code</Label>
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {PRESET_SAMPLES.map((sample, idx) => (
-                      <button 
-                        key={idx}
-                        type="button" 
-                        onClick={() => {
-                          setSourceCode(sample.code);
-                          setFilename(sample.filename);
-                        }} 
-                        className="inline-flex items-center text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 px-2.5 py-1 rounded-lg border border-blue-200 dark:border-blue-900 cursor-pointer transition-colors"
-                        title={`Load sample code (${sample.filename})`}
-                      >
-                        <Sparkles className="mr-1 h-3 w-3 text-blue-500" />
-                        {sample.label}
-                      </button>
-                    ))}
-                  </div>
+                  <span className="text-xs text-slate-400 font-medium">Supports Python (.py) &amp; Java (.java)</span>
                 </div>
                 <div className="w-full relative rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-1">
                 <Textarea
@@ -260,21 +314,35 @@ export function CodeSubmissionForm({ onSubmissionComplete }: CodeSubmissionFormP
               </div>
             </div>
 
-            <button 
-              type="button"
-              onClick={handlePasteSubmit} 
-              disabled={isSubmitting} 
-              className="w-full sm:w-auto bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold shadow-lg shadow-blue-500/10 px-8 py-4 rounded-xl transition-all cursor-pointer disabled:opacity-50"
-            >
-              {isSubmitting ? (
-                <span className="flex items-center justify-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Validating &amp; Triggering Multi-Agent Analysis...
-                </span>
-              ) : (
-                "Submit Code Analysis"
+            <div className="flex flex-wrap items-center gap-3">
+              <button 
+                type="button"
+                onClick={handlePasteSubmit} 
+                disabled={isSubmitting || !sourceCode.trim()} 
+                className="w-full sm:w-auto bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold shadow-lg shadow-blue-500/10 px-8 py-4 rounded-xl transition-all cursor-pointer disabled:opacity-50"
+              >
+                {isSubmitting ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Validating &amp; Triggering Multi-Agent Analysis...
+                  </span>
+                ) : (
+                  "Submit Code Analysis"
+                )}
+              </button>
+
+              {sourceCode.trim() && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => { setSourceCode(""); setFilename(""); setError(null); }}
+                  className="w-full sm:w-auto border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-semibold px-6 py-4 h-auto rounded-xl cursor-pointer"
+                  disabled={isSubmitting}
+                >
+                  Clear Code
+                </Button>
               )}
-            </button>
+            </div>
           </TabsContent>
 
           <TabsContent value="upload" className="mt-6 space-y-5">
@@ -345,13 +413,152 @@ export function CodeSubmissionForm({ onSubmissionComplete }: CodeSubmissionFormP
               </div>
             )}
           </TabsContent>
+
+          <TabsContent value="github" className="mt-6 space-y-6">
+            <div className="space-y-4">
+              {/* Select GitHub Repository Dropdown & URL Input */}
+              <div className="space-y-2">
+                <Label htmlFor="select-github-repo" className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Select GitHub Repository
+                </Label>
+                <select
+                  id="select-github-repo"
+                  value={repoUrl}
+                  onChange={(e) => {
+                    const selected = e.target.value;
+                    if (selected) {
+                      setRepoUrl(selected);
+                      const found = userRepos.find((r) => (r.html_url === selected) || (`https://github.com/${r.full_name}` === selected));
+                      if (found && found.default_branch) {
+                        setRepoBranch(found.default_branch);
+                      }
+                      handleFetchRepoContentsForUrl(selected);
+                    }
+                  }}
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                >
+                  <option value="">
+                    {isLoadingRepos ? "⏳ Fetching your GitHub repositories..." : "-- Select from Your Logged-In Account Repositories --"}
+                  </option>
+                  {userRepos.map((repo) => {
+                    const repoUrlVal = repo.html_url || `https://github.com/${repo.full_name}`;
+                    return (
+                      <option key={repo.id} value={repoUrlVal}>
+                        📦 {repo.full_name} ({repo.default_branch || "main"})
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="github-repo-url" className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Or Enter Custom GitHub Repository URL / Name
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="github-repo-url"
+                    placeholder="e.g. asrithaa07/my-repo or https://github.com/owner/repo"
+                    value={repoUrl}
+                    onChange={(e) => setRepoUrl(e.target.value)}
+                    className="rounded-xl border-slate-200 dark:border-slate-800 bg-transparent py-5 focus-visible:ring-blue-500 flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleFetchRepoContents}
+                    disabled={isFetchingFiles || !repoUrl.trim()}
+                    className="rounded-xl font-bold border-slate-200 dark:border-slate-800 px-4 py-5 cursor-pointer"
+                  >
+                    {isFetchingFiles ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                    ) : (
+                      "Browse Files"
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="github-branch" className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    Branch (default: main)
+                  </Label>
+                  <Input
+                    id="github-branch"
+                    placeholder="main"
+                    value={repoBranch}
+                    onChange={(e) => setRepoBranch(e.target.value)}
+                    className="rounded-xl border-slate-200 dark:border-slate-800 bg-transparent py-5"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="github-filepath" className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    Target File Path
+                  </Label>
+                  <Input
+                    id="github-filepath"
+                    placeholder="e.g. app/main.py or src/App.java"
+                    value={repoFilePath}
+                    onChange={(e) => setRepoFilePath(e.target.value)}
+                    className="rounded-xl border-slate-200 dark:border-slate-800 bg-transparent py-5"
+                  />
+                </div>
+              </div>
+
+              {/* Repository Files Discovered Picker */}
+              {repoFiles.length > 0 && (
+                <div className="space-y-2 p-4 rounded-xl border border-blue-100 dark:border-blue-900/40 bg-blue-50/40 dark:bg-blue-950/20">
+                  <span className="text-xs font-bold text-blue-800 dark:text-blue-300 block">
+                    📁 Discovered Files in Repository ({repoFiles.length}):
+                  </span>
+                  <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto pt-1">
+                    {repoFiles.map((file, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setRepoFilePath(file.path)}
+                        className={`text-xs font-mono font-bold px-3 py-1.5 rounded-lg border transition-all cursor-pointer ${
+                          repoFilePath === file.path
+                            ? "bg-blue-600 text-white border-blue-600 shadow-sm"
+                            : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-blue-400"
+                        }`}
+                      >
+                        📄 {file.path}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <Button
+              type="button"
+              onClick={handleGitHubRepoSubmit}
+              disabled={isSubmitting || !repoUrl.trim()}
+              className="w-full sm:w-auto bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold shadow-lg shadow-blue-500/10 px-8 py-4 rounded-xl transition-all cursor-pointer disabled:opacity-50"
+            >
+              {isSubmitting ? (
+                <span className="flex items-center justify-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Fetching &amp; Analyzing GitHub Repo...
+                </span>
+              ) : (
+                "Analyze GitHub Repository"
+              )}
+            </Button>
+          </TabsContent>
         </Tabs>
 
         {error && (
-          <Alert variant="destructive" className="mt-6 rounded-xl border border-red-200 dark:border-red-950 bg-red-50/50 dark:bg-red-950/20">
-            <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
-            <AlertTitle className="text-red-800 dark:text-red-400 font-bold">Execution Error</AlertTitle>
-            <AlertDescription className="text-red-700 dark:text-red-300 text-sm mt-1">{error}</AlertDescription>
+          <Alert variant={error.includes("No Java") ? "default" : "destructive"} className={`mt-6 rounded-xl border ${error.includes("No Java") ? "border-blue-200 bg-blue-50/50 dark:bg-blue-950/20" : "border-red-200 dark:border-red-950 bg-red-50/50 dark:bg-red-950/20"}`}>
+            <AlertCircle className={`h-4 w-4 ${error.includes("No Java") ? "text-blue-600 dark:text-blue-400" : "text-red-600 dark:text-red-400"}`} />
+            <AlertTitle className={`font-bold ${error.includes("No Java") ? "text-blue-800 dark:text-blue-400" : "text-red-800 dark:text-red-400"}`}>
+              {error.includes("No Java") ? "Repository Information" : "Execution Error"}
+            </AlertTitle>
+            <AlertDescription className={`text-sm mt-1 ${error.includes("No Java") ? "text-blue-700 dark:text-blue-300" : "text-red-700 dark:text-red-300"}`}>
+              {error}
+            </AlertDescription>
           </Alert>
         )}
       </CardContent>
@@ -364,11 +571,13 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
   const [selectedFindingId, setSelectedFindingId] = useState<string | null>(null);
   const [severityFilter, setSeverityFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all"); // all, security, quality, owasp
-  const [activePortalTab, setActivePortalTab] = useState<"findings" | "diff" | "owasp" | "pr_summary" | "full_code" | "assistant">("findings");
+  const [activePortalTab, setActivePortalTab] = useState<"findings" | "visualizations" | "diff" | "pr_summary" | "full_code" | "assistant">("findings");
+  const [activeVisTab, setActiveVisTab] = useState<"pie" | "radar" | "owasp">("pie");
   const [assistantQuery, setAssistantQuery] = useState<string | undefined>(undefined);
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
   const [copiedFullCode, setCopiedFullCode] = useState<boolean>(false);
   const [showDiffInFullCode, setShowDiffInFullCode] = useState<boolean>(false);
+  const [rightPanelTab, setRightPanelTab] = useState<"code" | "remediation">("code");
 
   // Sync state if initialSubmission changes from parent
   useEffect(() => {
@@ -534,16 +743,26 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
     return `${bgClass} ${borderClass}`;
   };
 
+  const calculatedScores = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
+  (submission.findings || []).forEach((f) => {
+    const sev = (f.severity || "info").toLowerCase();
+    if (sev in calculatedScores) {
+      calculatedScores[sev as keyof typeof calculatedScores] += 1;
+    } else {
+      calculatedScores.info += 1;
+    }
+  });
+
   const scores = {
-    critical: Number(submission.severity_scores?.critical ?? 0),
-    high: Number(submission.severity_scores?.high ?? 0),
-    medium: Number(submission.severity_scores?.medium ?? 0),
-    low: Number(submission.severity_scores?.low ?? 0),
-    info: Number(submission.severity_scores?.info ?? 0),
+    critical: Math.max(calculatedScores.critical, Number(submission.severity_scores?.critical ?? 0)),
+    high: Math.max(calculatedScores.high, Number(submission.severity_scores?.high ?? 0)),
+    medium: Math.max(calculatedScores.medium, Number(submission.severity_scores?.medium ?? 0)),
+    low: Math.max(calculatedScores.low, Number(submission.severity_scores?.low ?? 0)),
+    info: Math.max(calculatedScores.info, Number(submission.severity_scores?.info ?? 0)),
   };
   const computedScore = Math.max(0, Math.min(100, 100 - (scores.critical * 30) - (scores.high * 15) - (scores.medium * 8) - (scores.low * 3) - (scores.info * 1)));
   const healthScore = (submission.health_score !== undefined && submission.health_score !== null) ? submission.health_score : computedScore;
-  const totalFindings = findings.length;
+  const totalFindings = (submission.findings || []).length;
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -615,6 +834,16 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
           </Button>
 
           <Button
+            variant={activePortalTab === "visualizations" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setActivePortalTab("visualizations")}
+            className={`rounded-xl font-bold text-xs ${activePortalTab === "visualizations" ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/10" : "text-slate-600 dark:text-slate-300"}`}
+          >
+            <Activity className="mr-1.5 h-4 w-4 text-indigo-300" />
+            Security Visualizations
+          </Button>
+
+          <Button
             variant={activePortalTab === "pr_summary" ? "default" : "ghost"}
             size="sm"
             onClick={() => setActivePortalTab("pr_summary")}
@@ -622,16 +851,6 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
           >
             <FileText className="mr-1.5 h-4 w-4" />
             PR Review Summary
-          </Button>
-
-          <Button
-            variant={activePortalTab === "owasp" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setActivePortalTab("owasp")}
-            className={`rounded-xl font-bold text-xs ${activePortalTab === "owasp" ? "bg-purple-600 text-white shadow-md shadow-purple-500/10" : "text-slate-600 dark:text-slate-300"}`}
-          >
-            <ShieldAlert className="mr-1.5 h-4 w-4" />
-            OWASP Matrix Heatmap
           </Button>
 
           <Button
@@ -657,10 +876,62 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
       </Card>
 
       {/* Main Tab Content */}
+      {activePortalTab === "visualizations" && (
+        <Card className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-xl rounded-2xl overflow-hidden backdrop-blur-sm p-6 space-y-6 animate-in fade-in duration-200">
+          <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 dark:border-slate-800/60 pb-4">
+            <Button
+              variant={activeVisTab === "pie" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setActiveVisTab("pie")}
+              className={`rounded-xl text-xs font-bold transition-all cursor-pointer ${activeVisTab === "pie" ? "bg-indigo-600 text-white border-transparent" : "text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800"}`}
+            >
+              Severity Pie Chart
+            </Button>
+            <Button
+              variant={activeVisTab === "radar" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setActiveVisTab("radar")}
+              className={`rounded-xl text-xs font-bold transition-all cursor-pointer ${activeVisTab === "radar" ? "bg-indigo-600 text-white border-transparent" : "text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800"}`}
+            >
+              Security Radar Graph
+            </Button>
+            <Button
+              variant={activeVisTab === "owasp" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setActiveVisTab("owasp")}
+              className={`rounded-xl text-xs font-bold transition-all cursor-pointer ${activeVisTab === "owasp" ? "bg-indigo-600 text-white border-transparent" : "text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800"}`}
+            >
+              OWASP Matrix Heatmap
+            </Button>
+          </div>
+
+          <div className="pt-2">
+            {activeVisTab === "pie" && <SeverityPieChart scores={scores} />}
+            {activeVisTab === "radar" && (
+              <div className="flex flex-col items-center animate-in fade-in zoom-in-95 duration-300">
+                <h3 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white mb-2 flex items-center gap-2">
+                  <Activity className="h-5 w-5 text-indigo-500" />
+                  Multidimensional Security Posture Radar
+                </h3>
+                <SecurityRadarChart findings={findings} healthScore={healthScore} />
+              </div>
+            )}
+            {activeVisTab === "owasp" && (
+              <div className="animate-in fade-in zoom-in-95 duration-300">
+                <SecurityMatrix
+                  findings={findings}
+                  onSelectOwaspCategory={() => {
+                    setActivePortalTab("findings");
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
+
       {activePortalTab === "findings" && (
-        <div className="space-y-6">
-          {/* Visual Severity Breakdown Pie Chart */}
-          <SeverityPieChart scores={scores} />
+        <div className="space-y-6 animate-in fade-in duration-200">
           {/* Two-Column Explorer Layout */}
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
             {/* Left column: Findings List */}
@@ -806,158 +1077,167 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
               </Card>
             )}
 
-            {/* Right column: Interactive Source Code Viewer */}
+            {/* Right column: Interactive Source Code Explorer OR Selected Finding Detail Pane */}
             <Card className="lg:col-span-3 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-xl rounded-2xl overflow-hidden h-[680px] flex flex-col">
-              <CardHeader className="p-4 border-b border-slate-100 dark:border-slate-800/60 flex-shrink-0 flex items-center justify-between">
-                <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-400">Interactive Source Code Explorer</CardTitle>
-                <span className="text-[11px] text-slate-500">Click highlighted lines to view remediation</span>
-              </CardHeader>
-              <CardContent className="p-0 flex-1 overflow-auto bg-slate-950 text-slate-300">
-                <pre className="font-mono text-xs leading-relaxed py-4 select-none">
-                  {submission.source_code.split("\n").map((line, idx) => {
-                    const lineNum = idx + 1;
-                    const highlightClass = getLineHighlightClass(lineNum);
-                    const lineFindings = findingsByLine[lineNum] || [];
-                    const hasLineFindings = lineFindings.length > 0;
-                    const topFinding = lineFindings[0];
-
-                    return (
-                      <div
-                        key={idx}
-                        onClick={() => {
-                          if (hasLineFindings) {
-                            setSelectedFindingId(lineFindings[0].id);
-                          }
-                        }}
-                        className={`flex items-center px-4 transition-all duration-150 ${highlightClass} ${
-                          hasLineFindings ? "cursor-pointer hover:bg-slate-900/50" : ""
-                        }`}
-                      >
-                        <span className="w-8 text-right pr-3 select-none text-slate-600 font-mono text-[10px] border-r border-slate-900 mr-4">
-                          {lineNum}
-                        </span>
-                        <span className="flex-1 whitespace-pre font-mono text-[11px] select-text">
-                          {line || " "}
-                        </span>
-                        {hasLineFindings && topFinding && (
-                          <span className="ml-2 flex items-center gap-1">
-                            {getSeverityBadge(topFinding.severity)}
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </pre>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Selected Finding Remediation & Explanation Card */}
-          {selectedFinding && (
-            <Card id="selected-finding-remediation" className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-xl rounded-2xl overflow-hidden backdrop-blur-sm animate-in fade-in slide-in-from-bottom-4 duration-300 scroll-mt-28">
-              <CardHeader className="p-6 border-b border-slate-100 dark:border-slate-800/60 bg-gradient-to-r from-slate-50 to-blue-50/30 dark:from-slate-950 dark:to-slate-900 flex flex-col sm:flex-row justify-between gap-4">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {getSeverityBadge(selectedFinding.severity)}
-                    {getCategoryFlag(selectedFinding)}
-                    {selectedFinding.cwe_id && (
-                      <Badge variant="secondary" className="font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 text-[10px]">
-                        {selectedFinding.cwe_id}
-                      </Badge>
-                    )}
-                    {selectedFinding.owasp_category && (
-                      <Badge className="font-semibold bg-purple-600 text-white text-[10px] px-2.5 py-0.5">
-                        🛡️ {selectedFinding.owasp_category}
-                      </Badge>
-                    )}
-                  </div>
-                  <CardTitle className="text-lg font-bold text-slate-900 dark:text-white">{selectedFinding.title}</CardTitle>
-                </div>
-                <div className="flex flex-col items-end gap-2">
-                  <span className="text-xs font-mono font-bold text-slate-500">
-                    {selectedFinding.line_number != null ? `Line ${selectedFinding.line_number}` : "Global Scope"}
-                  </span>
-                  <Button
+              <CardHeader className="p-3 border-b border-slate-100 dark:border-slate-800/60 flex-shrink-0 flex items-center justify-between gap-2 bg-slate-50/50 dark:bg-slate-950/50">
+                <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-950 p-1 rounded-xl">
+                  <button
                     type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setAssistantQuery(`Explain ${selectedFinding.title} (${selectedFinding.cwe_id || selectedFinding.owasp_category || ""}) and how to fix it.`);
-                      setActivePortalTab("assistant");
-                    }}
-                    className="text-xs font-semibold border-blue-200 dark:border-blue-900 text-blue-600 dark:text-blue-400 rounded-xl cursor-pointer"
+                    onClick={() => setRightPanelTab("code")}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      rightPanelTab === "code"
+                        ? "bg-white dark:bg-slate-900 shadow text-blue-600 dark:text-blue-400"
+                        : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                    }`}
                   >
-                    <MessageSquare className="mr-1.5 h-3.5 w-3.5" />
-                    Ask Assistant About Fix
-                  </Button>
+                    <FileCode className="h-3.5 w-3.5" />
+                    Source Explorer
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRightPanelTab("remediation")}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      rightPanelTab === "remediation"
+                        ? "bg-white dark:bg-slate-900 shadow text-emerald-600 dark:text-emerald-400"
+                        : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                    }`}
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Remediation Detail {selectedFinding ? `(Line ${selectedFinding.line_number ?? "Global"})` : ""}
+                  </button>
                 </div>
+
+                <span className="text-[11px] text-slate-500 hidden sm:inline font-medium">
+                  {rightPanelTab === "code" ? "Click highlighted lines to inspect" : "Verified AI Fix"}
+                </span>
               </CardHeader>
 
-              <CardContent className="p-6 space-y-6">
-                {/* Finding Description */}
-                <div>
-                  <Label className="text-xs uppercase font-bold text-slate-400 tracking-wider">Analysis Finding &amp; Impact</Label>
-                  <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed mt-1">{selectedFinding.description}</p>
-                </div>
+              {rightPanelTab === "code" ? (
+                <CardContent className="p-0 flex-1 overflow-auto bg-slate-950 text-slate-300">
+                  <pre className="font-mono text-xs leading-relaxed py-4 select-none">
+                    {submission.source_code.split("\n").map((line, idx) => {
+                      const lineNum = idx + 1;
+                      const highlightClass = getLineHighlightClass(lineNum);
+                      const lineFindings = findingsByLine[lineNum] || [];
+                      const hasLineFindings = lineFindings.length > 0;
+                      const topFinding = lineFindings[0];
 
-                {/* Remediation Agent Section */}
-                <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800/60">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="h-4 w-4 text-blue-500" />
-                      <Label className="text-xs uppercase font-extrabold text-blue-600 dark:text-blue-400 tracking-wider">
-                        Remediation Agent Recommendations &amp; Corrected Code
-                      </Label>
-                    </div>
-                  </div>
-
-                  <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
-                    {selectedFinding.remediation_summary || "Apply parameterized queries and modular refactoring according to standard security rules."}
-                  </p>
-
-                  {/* Corrected Code Block */}
-                  {selectedFinding.corrected_code && (
-                    <div className="relative rounded-xl border border-slate-800 bg-slate-950 p-4 space-y-2 overflow-hidden shadow-inner">
-                      <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                        <span className="text-[11px] font-mono font-bold text-emerald-400 flex items-center gap-1.5">
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                          Remediated &amp; Corrected Code Snippet
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="xs"
-                          onClick={() => copyToClipboard(selectedFinding.corrected_code || "")}
-                          className="text-[10px] text-slate-400 hover:text-white rounded-lg px-2 py-1"
+                      return (
+                        <div
+                          key={idx}
+                          onClick={() => {
+                            if (hasLineFindings) {
+                              setSelectedFindingId(lineFindings[0].id);
+                              setRightPanelTab("remediation");
+                            }
+                          }}
+                          className={`flex items-center px-4 transition-all duration-150 ${highlightClass} ${
+                            hasLineFindings ? "cursor-pointer hover:bg-slate-900/50" : ""
+                          }`}
                         >
-                          {copiedCode ? <Check className="h-3 w-3 text-emerald-400 mr-1" /> : <Copy className="h-3 w-3 mr-1" />}
-                          {copiedCode ? "Copied!" : "Copy Code"}
+                          <span className="w-8 text-right pr-3 select-none text-slate-600 font-mono text-[10px] border-r border-slate-900 mr-4">
+                            {lineNum}
+                          </span>
+                          <span className="flex-1 whitespace-pre font-mono text-[11px] select-text">
+                            {line || " "}
+                          </span>
+                          {hasLineFindings && topFinding && (
+                            <span className="ml-2 flex items-center gap-1">
+                              {getSeverityBadge(topFinding.severity)}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </pre>
+                </CardContent>
+              ) : (
+                <CardContent className="p-5 flex-1 overflow-auto space-y-5 bg-white dark:bg-slate-900/60">
+                  {selectedFinding ? (
+                    <div className="space-y-5">
+                      <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 flex-wrap gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {getSeverityBadge(selectedFinding.severity)}
+                          {getCategoryFlag(selectedFinding)}
+                          {selectedFinding.cwe_id && (
+                            <Badge variant="secondary" className="font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 text-[10px]">
+                              {selectedFinding.cwe_id}
+                            </Badge>
+                          )}
+                          {selectedFinding.owasp_category && (
+                            <Badge className="font-semibold bg-purple-600 text-white text-[10px] px-2.5 py-0.5">
+                              🛡️ {selectedFinding.owasp_category}
+                            </Badge>
+                          )}
+                        </div>
+
+                        <Button
+                          type="button"
+                          size="xs"
+                          variant="outline"
+                          onClick={() => {
+                            setAssistantQuery(`Explain ${selectedFinding.title} (${selectedFinding.cwe_id || selectedFinding.owasp_category || ""}) and how to fix it.`);
+                            setActivePortalTab("assistant");
+                          }}
+                          className="text-[11px] font-semibold border-blue-200 dark:border-blue-900 text-blue-600 dark:text-blue-400 rounded-lg"
+                        >
+                          <MessageSquare className="mr-1 h-3 w-3" />
+                          Ask Assistant
                         </Button>
                       </div>
-                      <pre className="font-mono text-xs leading-relaxed text-emerald-300 overflow-x-auto whitespace-pre">
-                        {selectedFinding.corrected_code}
-                      </pre>
-                    </div>
-                  )}
 
-                  {/* Best Practice Explanation */}
-                  {selectedFinding.best_practice_explanation && (
-                    <div className="p-4 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/40 text-xs sm:text-sm text-slate-700 dark:text-slate-300 space-y-1">
-                      <span className="font-bold text-blue-700 dark:text-blue-400 block uppercase text-[10px] tracking-wider">
-                        Grounded Best Practice Standard:
-                      </span>
-                      <p className="leading-relaxed">{selectedFinding.best_practice_explanation}</p>
+                      <div>
+                        <h4 className="text-base font-bold text-slate-900 dark:text-white">{selectedFinding.title}</h4>
+                        <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed mt-1">{selectedFinding.description}</p>
+                      </div>
+
+                      <div className="space-y-3 pt-2">
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="h-4 w-4 text-emerald-500" />
+                          <span className="text-xs font-bold uppercase text-emerald-600 dark:text-emerald-400 tracking-wider">
+                            Remediation Guidance &amp; Secure Snippet
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                          {selectedFinding.remediation_summary || "Apply parameterized queries and modular refactoring according to standard security rules."}
+                        </p>
+
+                        {selectedFinding.corrected_code && (
+                          <div className="relative rounded-xl border border-slate-800 bg-slate-950 p-3 space-y-2 shadow-inner">
+                            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                              <span className="text-[10px] font-mono font-bold text-emerald-400 flex items-center gap-1.5">
+                                <CheckCircle2 className="h-3 w-3" />
+                                Remediated Secure Snippet
+                              </span>
+                              <Button
+                                variant="ghost"
+                                size="xs"
+                                onClick={() => copyToClipboard(selectedFinding.corrected_code || "")}
+                                className="text-[10px] text-slate-400 hover:text-white rounded-lg px-2 py-0.5"
+                              >
+                                {copiedCode ? <Check className="h-3 w-3 text-emerald-400 mr-1" /> : <Copy className="h-3 w-3 mr-1" />}
+                                {copiedCode ? "Copied!" : "Copy"}
+                              </Button>
+                            </div>
+                            <pre className="font-mono text-[11px] leading-relaxed text-emerald-300 overflow-x-auto whitespace-pre max-h-[220px]">
+                              {selectedFinding.corrected_code}
+                            </pre>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-12 text-center text-slate-500 text-xs">
+                      Select a finding from the left list to view detailed remediation guidance.
                     </div>
                   )}
-                </div>
-              </CardContent>
+                </CardContent>
+              )}
             </Card>
-          )}
+          </div>
         </div>
       )}
-      {/* OWASP Top 10 Security Matrix Heatmap Tab */}
-      {activePortalTab === "owasp" && (
-        <SecurityMatrix findings={submission.findings || []} />
-      )}
+
 
       {/* PR Review & Code Diff Summary Tab */}
       {activePortalTab === "pr_summary" && (
@@ -1065,19 +1345,71 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
       )}
 
       {/* Full Remediated Code & Diff Tab */}
-      {activePortalTab === "full_code" && (
+      {activePortalTab === "full_code" && (() => {
+        const metadata = submission.pr_summary?.self_healing_metadata;
+        const isRemediationSuccess = metadata?.remediation_status === "success" || metadata?.rescan_passed === true;
+        const hasUnresolvedSyntaxError = !isRemediationSuccess && (
+          submission.is_valid_syntax === false || 
+          (submission.validation_errors && submission.validation_errors.length > 0)
+        );
+
+        const status = hasUnresolvedSyntaxError 
+          ? "syntax_error" 
+          : (metadata?.remediation_status || (metadata?.rescan_passed === false ? "remediation_failed" : "success"));
+        const secRequired = metadata?.security_remediation_required ?? true;
+
+        let titleText = "Fully Remediated & Production-Ready Source Code";
+        let subtitleText = "Complete refactored source file verified via automated post-remediation re-scan to eliminate all OWASP vulnerabilities.";
+        let badgeText = "Automated Re-Scan: 100% Fixed (0 Remaining Vulnerabilities)";
+        let badgeColor = "bg-emerald-600/90 text-white";
+
+        if (status === "syntax_error") {
+          const errLine = submission.validation_errors?.[0]?.line || submission.findings?.find(f => f.category === "syntax_error")?.line_number;
+          titleText = `Remediation Unsuccessful — Syntax Error ${errLine ? `on Line ${errLine}` : "Detected"}`;
+          subtitleText = "Source code contains syntax/compiler errors. Code must be syntactically valid before security remediation can run.";
+          badgeText = `Automated Re-Scan: Syntax Error (${errLine ? `Line ${errLine}` : "Unresolved"})`;
+          badgeColor = "bg-red-600/90 text-white";
+        } else if (status === "remediation_failed" || metadata?.rescan_passed === false) {
+          titleText = "Remediation Unsuccessful — No Code Changes Generated";
+          subtitleText = metadata?.remediation_error || "Re-scan detected unmitigated security vulnerabilities or candidate code was unchanged. Preserved original source for security compliance.";
+          badgeText = `Automated Re-Scan: Remediation Failed (${metadata?.rescan_findings_count ?? 1} Remaining Vulnerabilities)`;
+          badgeColor = "bg-red-600/90 text-white";
+        } else if (status === "no_vulnerabilities" || status === "quality_only" || (!secRequired && (submission.findings?.length || 0) === 0)) {
+          titleText = "Source Code Verified (0 Security Vulnerabilities)";
+          subtitleText = "Submitted source code complies with OWASP Top 10 security standards. Quality and design recommendations are highlighted in the Findings tab.";
+          badgeText = "Automated Re-Scan: 100% Secure (0 Security Vulnerabilities)";
+          badgeColor = "bg-emerald-600/90 text-white";
+        } else if (status === "partial") {
+          titleText = `Partial Remediation — ${metadata?.rescan_findings_count ?? 1} Vulnerabilities Remaining`;
+          subtitleText = "Partial fixes applied. Some security findings require manual architectural refactoring.";
+          badgeText = `Automated Re-Scan: Partial Fix (${metadata?.rescan_findings_count} Remaining Vulnerabilities)`;
+          badgeColor = "bg-amber-600/90 text-white";
+        }
+
+        if (showDiffInFullCode) {
+          titleText = "Side-by-Side Code Remediation Diff";
+          subtitleText = "Visual side-by-side AST comparison comparing original vulnerable code with AI-generated secure refactored code.";
+        }
+
+        const hasRemediatedCode = Boolean(submission.pr_summary?.full_remediated_code);
+
+        return (
         <Card className="border border-emerald-200 dark:border-emerald-900/60 bg-white dark:bg-slate-900/60 shadow-xl rounded-2xl overflow-hidden backdrop-blur-sm p-6 space-y-6">
-          {/* Header with View Switcher and single Copy button */}
+          {/* Header with View Switcher and Copy button */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800/60">
             <div>
-              <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-emerald-500" />
-                {showDiffInFullCode ? "Side-by-Side Code Remediation Diff" : "Fully Remediated & Production-Ready Source Code"}
-              </h3>
+              <div className="flex items-center gap-3 flex-wrap">
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-emerald-500" />
+                  {titleText}
+                </h3>
+                <Badge className={`${badgeColor} border-0 px-2.5 py-1 text-[11px] font-bold rounded-lg flex items-center gap-1.5 shadow-sm`}>
+                  <ShieldCheck className="h-3.5 w-3.5 text-white" />
+                  {badgeText}
+                </Badge>
+              </div>
               <p className="text-xs text-slate-500 mt-1">
-                {showDiffInFullCode
-                  ? "Visual side-by-side AST comparison comparing original vulnerable code with AI-generated secure refactored code."
-                  : "Complete refactored source file addressing all flagged OWASP vulnerabilities and code quality smells."}
+                {subtitleText}
               </p>
             </div>
 
@@ -1114,10 +1446,12 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
               <Button
                 type="button"
                 onClick={() => {
-                  const fullCode = submission.pr_summary?.full_remediated_code || submission.source_code;
-                  navigator.clipboard.writeText(fullCode);
-                  setCopiedFullCode(true);
-                  setTimeout(() => setCopiedFullCode(false), 2000);
+                  const codeToCopy = submission.pr_summary?.full_remediated_code || submission.source_code;
+                  if (codeToCopy) {
+                    navigator.clipboard.writeText(codeToCopy);
+                    setCopiedFullCode(true);
+                    setTimeout(() => setCopiedFullCode(false), 2000);
+                  }
                 }}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl px-4 py-2 text-xs flex items-center gap-2 shadow-md shadow-emerald-500/10 cursor-pointer"
               >
@@ -1127,7 +1461,7 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
             </div>
           </div>
 
-          {/* In-Place Content Switcher: Renders either the Full Code or the Side-by-Side Diff directly in place */}
+          {/* In-Place Content Switcher */}
           {!showDiffInFullCode ? (
             <div className="space-y-3 animate-in fade-in duration-300">
               <div className="flex items-center justify-between">
@@ -1138,9 +1472,7 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
               </div>
               <div className="relative rounded-2xl border border-slate-800 bg-slate-950 p-6 overflow-x-auto shadow-inner">
                 <pre className="font-mono text-xs leading-relaxed text-emerald-300 whitespace-pre">
-                  {submission.pr_summary?.full_remediated_code || (
-                    "# All findings resolved.\n# Submitted code complies with secure coding standards:\n\n" + submission.source_code
-                  )}
+                  {submission.pr_summary?.full_remediated_code || submission.source_code}
                 </pre>
               </div>
             </div>
@@ -1155,7 +1487,8 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
             </div>
           )}
         </Card>
-      )}
+        );
+      })()}
 
       {/* Conversational Assistant Tab */}
       {activePortalTab === "assistant" && (
