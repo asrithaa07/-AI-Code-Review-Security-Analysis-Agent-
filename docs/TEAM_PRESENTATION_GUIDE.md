@@ -47,6 +47,18 @@ Your team will definitely ask what AI models are under the hood.
 6. **Dashboard Delivery:** The data is pushed back to the frontend where the React dashboard renders the Radar Chart and interactive code-diffs.
 7. **Conversational Follow-up:** If the user has questions, they can talk to the Chatbot, which uses ChromaDB RAG to pull up official documentation and answer questions instantly.
 
+## 5. Most Important Files in the Codebase (Where the Magic Happens)
+*If the panel asks to see the actual code, have these files ready to show off:*
+
+1. **`backend/app/workflows/orchestrator.py`**
+   - **Why it matters:** This is the core brain of the application. It contains the **LangGraph** nodes and edges that coordinate the agents. Show this to prove the system uses true Agentic orchestration, not just standard API scripts.
+2. **`backend/app/agents/remediation_agent.py`**
+   - **Why it matters:** This file contains the primary Gemini 3.6 Flash logic. It demonstrates how we instruct the LLM to take bad code, understand the syntax, and produce perfectly secure output without breaking the application logic. 
+3. **`backend/app/agents/conversational_assistant.py`**
+   - **Why it matters:** This is where the highly advanced **Multi-Level Fallback** exists! Open this to show how the system gracefully catches internet outages or Gemini timeouts and instantly routes to the offline Synthesis Engine.
+4. **`frontend/src/components/security-radar-chart.tsx`**
+   - **Why it matters:** The most visually impressive part of the frontend. Show this to demonstrate how we use complex React hooks to dynamically parse the security scan JSON and render the stunning, animated 8-axis data visualizations.
+
 ---
 
 ### Tips for the Panel Presentation Tomorrow:
