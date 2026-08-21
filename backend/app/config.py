@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     embedding_model: str = "BAAI/bge-small-en-v1.5"
 
     gemini_api_key: str = ""
+    xai_api_key: str = ""
     portkey_api_key: str = ""
     portkey_backup_gemini_key: str = ""
     portkey_virtual_key: str = ""

@@ -35,7 +35,6 @@ import { CodeDiffViewer } from "@/components/code-diff-viewer";
 import { SecurityMatrix } from "@/components/security-matrix";
 import { AgentPipelineVisualizer } from "@/components/agent-pipeline-visualizer";
 import { SecurityRadarChart } from "@/components/security-radar-chart";
-
 interface CodeSubmissionFormProps {
   onSubmissionComplete: (submission: Submission) => void;
 }
@@ -909,10 +908,6 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
             {activeVisTab === "pie" && <SeverityPieChart scores={scores} />}
             {activeVisTab === "radar" && (
               <div className="flex flex-col items-center animate-in fade-in zoom-in-95 duration-300">
-                <h3 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white mb-2 flex items-center gap-2">
-                  <Activity className="h-5 w-5 text-indigo-500" />
-                  Multidimensional Security Posture Radar
-                </h3>
                 <SecurityRadarChart findings={findings} healthScore={healthScore} />
               </div>
             )}
@@ -1407,6 +1402,12 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
                   <ShieldCheck className="h-3.5 w-3.5 text-white" />
                   {badgeText}
                 </Badge>
+                {metadata?.remediation_engine_used && (
+                  <Badge className="bg-slate-800 dark:bg-slate-800 text-slate-100 border border-slate-700 px-2.5 py-1 text-[11px] font-bold rounded-lg flex items-center gap-1.5 shadow-sm">
+                    <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                    Engine: {metadata.remediation_engine_used}
+                  </Badge>
+                )}
               </div>
               <p className="text-xs text-slate-500 mt-1">
                 {subtitleText}

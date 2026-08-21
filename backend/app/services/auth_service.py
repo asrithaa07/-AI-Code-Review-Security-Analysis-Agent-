@@ -10,7 +10,7 @@ ALGORITHM = "HS256"
 class AuthService:
     def hash_password(self, password: str) -> str:
         # bcrypt expects bytes
-        salt = bcrypt.gensalt()
+        salt = bcrypt.gensalt(4)
         hashed = bcrypt.hashpw(password.encode("utf-8"), salt)
         return hashed.decode("utf-8")
 

@@ -154,7 +154,29 @@ def generate_assistant_response(
             if llm_text and hasattr(llm_text, "text") and llm_text.text:
                 return {"reply": llm_text.text, "rag_sources": retrieved_chunks}
         except Exception as e:
-            print(f"LLM call warning ({e}). Falling back to instant ChatGPT synthesis engine.")
+            print(f"Gemini call warning ({e}). Falling back to xAI.")
+
+    # 2b. xAI (Grok) Fallback Attempt
+    xai_api_key = settings.xai_api_key or os.environ.get("XAI_API_KEY")
+    if xai_api_key:
+        try:
+            import openai
+            client = openai.OpenAI(api_key=xai_api_key, base_url="https://api.x.ai/v1")
+            completion = _execute_with_timeout(
+                client.chat.completions.create, 
+                kwargs={
+                    "model": "grok-2-latest", 
+                    "messages": [
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": prompt}
+                    ]
+                }, 
+                timeout_sec=3.0
+            )
+            if completion and completion.choices and completion.choices[0].message.content:
+                return {"reply": completion.choices[0].message.content, "rag_sources": retrieved_chunks}
+        except Exception as e:
+            print(f"xAI call warning ({e}). Falling back to instant ChatGPT synthesis engine.")
 
     # 3. Instant ChatGPT-Grade Dynamic Synthesis Engine (Sub-50ms)
     lowered = user_message.lower()
@@ -249,12 +271,7 @@ def generate_assistant_response(
                                  "3. **Secrets Isolation**: Always load keys from environment variables (`os.environ`).\n"
                                  "4. **Clean Code**: Keep method length concise and use guard clauses for early returns.")
         else:
-            reply_sections.append(f"### Technical Guidance: \"{user_message}\"\n")
-            reply_sections.append("Here is the secure coding breakdown for your query:\n\n"
-                                 "- **Security Standard**: Ensure all input parameters are validated against whitelist schemas.\n"
-                                 "- **Query & Execution Safety**: Use parameterized queries (`PreparedStatement`) or argument arrays (`subprocess.run([cmd, arg])`) to avoid injection.\n"
-                                 "- **Credential Storage**: Store private credentials in environment variables or key management services.\n"
-                                 "- **Clean Architecture**: Apply Single Responsibility Principle (SRP) and refactor deeply nested conditionals into early return guard clauses.")
+            reply_sections.append("Please ask questions related to these topics only.")
 
     final_reply = "\n\n".join(reply_sections)
     return {"reply": final_reply, "rag_sources": retrieved_chunks}
