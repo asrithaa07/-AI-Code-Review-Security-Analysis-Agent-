@@ -104,7 +104,7 @@ export function ConversationalAssistant({ submissionId, initialFindingQuery }: C
     {
       id: "welcome-msg",
       sender: "assistant",
-      text: "Hello! I am your ChatGPT-grade Conversational Secure Coding & Architecture Assistant. Ask me any question about code, OWASP Top 10 standards, SQL injection, syntax errors, code quality refactoring, or your code submission findings.",
+      text: "Hello! I am your Conversational Secure Coding & Architecture Assistant. Ask me any question about code, OWASP Top 10 standards, SQL injection, syntax errors, code quality refactoring, or your code submission findings.",
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     },
   ]);

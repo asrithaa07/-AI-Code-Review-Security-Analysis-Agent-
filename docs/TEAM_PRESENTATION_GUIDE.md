@@ -1,8 +1,6 @@
 # Team Presentation & Meeting Guide
 
-*Congratulations on being selected! Use this guide as a cheat-sheet when explaining the architecture, tech stack, and workflow to your team members.*
 
----
 
 ## 1. The Core Problem We Are Solving
 Start the meeting by explaining *why* this project exists:

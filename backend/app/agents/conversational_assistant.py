@@ -9,7 +9,7 @@ from app.rag.indexer import knowledge_base_retriever
 
 
 SYSTEM_PROMPT = """
-You are an elite, ChatGPT-grade Senior Security Architect and Principal Software Engineering Assistant.
+You are an elite Senior Security Architect and Principal Software Engineering Assistant.
 Your expertise spans:
 1. All programming languages (Python, Java, JavaScript, TypeScript, C++, Go, SQL, HTML/CSS).
 2. OWASP Top 10 (2021) security standards (A01 - A10) and CWE vulnerability classifications.
@@ -24,7 +24,7 @@ INSTRUCTIONS:
 - Be encouraging, highly professional, and provide step-by-step actionable guidance.
 """
 
-# Exhaustive ChatGPT-Grade Knowledge & Refactoring Topic Catalog
+# Exhaustive Enterprise-Grade Knowledge & Refactoring Topic Catalog
 TOPICS = {
     "sql_injection": {
         "name": "SQL Injection (SQLi / CWE-89 / OWASP A03)",
@@ -104,7 +104,7 @@ def generate_assistant_response(
     chat_history: Optional[List[Dict[str, str]]] = None
 ) -> Dict[str, Any]:
     """
-    Sub-second, ChatGPT-grade Conversational AI Assistant.
+    Sub-second, Enterprise-grade Conversational AI Assistant.
     Combines fast RAG vector lookup, Gemini LLM invocation with strict timeout,
     and a rich instant knowledge synthesis engine.
     """
@@ -150,7 +150,7 @@ def generate_assistant_response(
                 "NOTE: If developer asks 'what is [topic] and is it in my code', explain the topic FIRST (what it is, fix, code example) and THEN state if it's present in their code."
             )
 
-            llm_text = _execute_with_timeout(model.generate_content, args=(prompt,), timeout_sec=3.0)
+            llm_text = _execute_with_timeout(model.generate_content, args=(prompt,), timeout_sec=1.5)
             if llm_text and hasattr(llm_text, "text") and llm_text.text:
                 return {"reply": llm_text.text, "rag_sources": retrieved_chunks}
         except Exception as e:
@@ -158,7 +158,7 @@ def generate_assistant_response(
 
     # 2b. xAI (Grok) Fallback Attempt
     xai_api_key = settings.xai_api_key or os.environ.get("XAI_API_KEY")
-    if xai_api_key:
+    if xai_api_key and str(xai_api_key).strip().lower() not in ["none", "skip", ""]:
         try:
             import openai
             client = openai.OpenAI(api_key=xai_api_key, base_url="https://api.x.ai/v1")
@@ -171,14 +171,14 @@ def generate_assistant_response(
                         {"role": "user", "content": prompt}
                     ]
                 }, 
-                timeout_sec=3.0
+                timeout_sec=1.5
             )
             if completion and completion.choices and completion.choices[0].message.content:
                 return {"reply": completion.choices[0].message.content, "rag_sources": retrieved_chunks}
         except Exception as e:
-            print(f"xAI call warning ({e}). Falling back to instant ChatGPT synthesis engine.")
+            print(f"xAI call warning ({e}). Falling back to instant synthesis engine.")
 
-    # 3. Instant ChatGPT-Grade Dynamic Synthesis Engine (Sub-50ms)
+    # 3. Instant Dynamic Synthesis Engine (Sub-50ms)
     lowered = user_message.lower()
     normalized_msg = lowered.replace("-", " ").replace("_", " ")
 
