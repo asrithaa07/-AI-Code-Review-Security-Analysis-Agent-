@@ -382,7 +382,7 @@ async def run_agent_analysis_pipeline(submission_id: uuid.UUID) -> None:
         if submission:
             print(f"[PIPELINE ERROR FALLBACK] Orchestrator exception caught ({e}). Executing fail-safe self-healing remediation...")
             try:
-                from app.agents.remediation import heal_syntax_and_quality_code, run_self_healing_remediation
+                from app.agents.remediation import heal_syntax_and_quality_code
                 healed_src = heal_syntax_and_quality_code(submission.source_code or "", submission.language.value)
                 self_healing_res = run_self_healing_remediation(healed_src, submission.language.value, [])
                 
