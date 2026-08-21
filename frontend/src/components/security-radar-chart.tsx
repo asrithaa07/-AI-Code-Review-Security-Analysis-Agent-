@@ -206,8 +206,9 @@ export function SecurityRadarChart({ findings = [], healthScore = 100 }: Securit
         padding: 12,
         callbacks: {
           title: (context: any) => {
-            // Grab only the category name from the multi-line label
-            return context[0].label.split(',')[0].replace(/🛡️|🔒|🗄️|<\/>|🔀|⚠️|⏱️|🔧/g, '').trim();
+            // Grab only the category name from the multi-line label array
+            const labelStr = Array.isArray(context[0].label) ? context[0].label[0] : context[0].label.split(',')[0];
+            return labelStr.replace(/🛡️|🔒|🗄️|<\/>|🔀|⚠️|⏱️|🔧/g, '').trim();
           }
         }
       }
