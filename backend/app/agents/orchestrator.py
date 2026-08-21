@@ -367,12 +367,30 @@ async def run_agent_analysis_pipeline(submission_id: uuid.UUID) -> None:
                 
                 submission.status = SubmissionStatus.completed
                 submission.health_score = 100 if self_healing_res["rescan_passed"] else 50
-                submission.findings = []
+                original_findings = []
+                
+                # Highlight the failure visually in the findings payload so the user immediately knows the API crashed
+                original_findings.append({
+                    "id": str(uuid.uuid4()),
+                    "agent_source": "system_error",
+                    "category": "infrastructure_failure",
+                    "severity": "critical",
+                    "title": "LLM API Failure / Authentication Error",
+                    "description": f"The backend AI pipeline crashed processing your request. Error details: {str(e)}",
+                    "line_number": 1,
+                    "cwe_id": "CWE-287",
+                    "owasp_category": "A07:2021-Identification and Authentication Failures",
+                    "remediation_summary": "Check your GEMINI_API_KEY environment variables in the Render Dashboard and ensure the key is valid and has active quotas.",
+                    "corrected_code": submission.source_code,
+                    "best_practice_explanation": "Cloud security tools require valid LLM API keys with proper limits."
+                })
+                submission.findings = original_findings
+                
                 submission.pr_summary = {
-                    "title": f"Automated Remediation — {submission.language.value.upper()}",
-                    "executive_overview": "AI Remediation Agent successfully healed syntax and quality structures to produce production-ready executable code.",
+                    "title": f"Automated Remediation — Critical Pipeline Error",
+                    "executive_overview": f"CRITICAL PIPELINE FAILURE: The multi-agent LLM workflow encountered an unhandled exception and crashed: {str(e)}. This is typically due to an invalid Gemini API Key or Rate Limiting on the Render backend.",
                     "full_remediated_code": self_healing_res["full_remediated_code"],
-                    "summary": "AI Remediation Agent fixed identified issues in original source file.",
+                    "summary": f"System error caught instead of findings: {str(e)}",
                     "self_healing_metadata": {
                         "rescan_passed": self_healing_res["rescan_passed"],
                         "remediation_status": "success",
