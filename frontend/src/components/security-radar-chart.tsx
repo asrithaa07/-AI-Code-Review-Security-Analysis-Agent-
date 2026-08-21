@@ -161,8 +161,15 @@ export function SecurityRadarChart({ findings = [], healthScore = 100 }: Securit
     responsive: true,
     maintainAspectRatio: false,
     animation: {
-      duration: 1500,
+      duration: 2500,
       easing: 'easeOutElastic' as const,
+      delay: (context: any) => {
+        let delay = 0;
+        if (context.type === 'data' && context.mode === 'default') {
+          delay = context.dataIndex * 150 + context.datasetIndex * 100;
+        }
+        return delay;
+      },
     },
     scales: {
       r: {
@@ -271,7 +278,7 @@ export function SecurityRadarChart({ findings = [], healthScore = 100 }: Securit
       {/* Middle Grid Row: Insights */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         
-        <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+        <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 animate-in slide-in-from-bottom-8 fade-in duration-700 delay-[300ms] fill-mode-both hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-500/10 transition-all">
           <div className="flex items-center gap-2 mb-3">
             <BookOpen className="w-5 h-5 text-blue-400" />
             <h3 className="font-bold text-slate-200">How to read this chart</h3>
@@ -281,7 +288,7 @@ export function SecurityRadarChart({ findings = [], healthScore = 100 }: Securit
           </p>
         </div>
 
-        <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+        <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 animate-in slide-in-from-bottom-8 fade-in duration-700 delay-[500ms] fill-mode-both hover:-translate-y-1 hover:shadow-lg hover:shadow-yellow-500/10 transition-all">
           <div className="flex items-center gap-2 mb-4">
             <Lightbulb className="w-5 h-5 text-yellow-400" />
             <h3 className="font-bold text-slate-200">Key Insights</h3>
@@ -289,7 +296,7 @@ export function SecurityRadarChart({ findings = [], healthScore = 100 }: Securit
           
           <div className="mb-3">
             <span className="text-xs font-bold text-emerald-500 uppercase tracking-wider mb-1 block">Strongest Areas</span>
-            <ul className="text-sm text-slate-300 pl-4 list-disc marker:text-slate-600 space-y-1">
+            <ul className="text-sm text-slate-300 pl-4 list-disc marker:text-emerald-500 space-y-1">
               {strongest.map(([st, val]) => <li key={st}>{st} ({val}/100)</li>)}
             </ul>
           </div>
@@ -297,7 +304,7 @@ export function SecurityRadarChart({ findings = [], healthScore = 100 }: Securit
           <div>
             <span className="text-xs font-bold text-red-400 uppercase tracking-wider mb-1 block">Areas Needing Attention</span>
             {weakest.length > 0 ? (
-              <ul className="text-sm text-slate-300 pl-4 list-disc marker:text-red-900 space-y-1">
+              <ul className="text-sm text-slate-300 pl-4 list-disc marker:text-red-500 space-y-1">
                 {weakest.map(([wk, val]) => <li key={wk}>{wk} ({val}/100)</li>)}
               </ul>
             ) : (
@@ -306,7 +313,7 @@ export function SecurityRadarChart({ findings = [], healthScore = 100 }: Securit
           </div>
         </div>
 
-        <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+        <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 animate-in slide-in-from-bottom-8 fade-in duration-700 delay-[700ms] fill-mode-both hover:-translate-y-1 hover:shadow-lg hover:shadow-indigo-500/10 transition-all">
           <div className="flex items-center gap-2 mb-3">
             <Target className="w-5 h-5 text-indigo-400" />
             <h3 className="font-bold text-slate-200">Recommendations</h3>
@@ -321,7 +328,7 @@ export function SecurityRadarChart({ findings = [], healthScore = 100 }: Securit
       {/* Bottom Footer Row: Metrics */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center gap-4">
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center gap-4 animate-in zoom-in-95 fade-in duration-500 delay-[900ms] fill-mode-both hover:-translate-y-1 hover:border-slate-600 transition-all cursor-default">
           <div className="bg-slate-800 p-2 rounded-lg text-slate-400"><Shield className="w-5 h-5" /></div>
           <div>
             <p className="text-xs text-slate-400">Total Findings</p>
@@ -329,7 +336,8 @@ export function SecurityRadarChart({ findings = [], healthScore = 100 }: Securit
           </div>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center gap-4 border-l-2 border-l-red-500">
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center gap-4 border-l-2 border-l-red-500 animate-in zoom-in-95 fade-in duration-500 delay-[1000ms] fill-mode-both hover:-translate-y-1 hover:border-slate-600 transition-all cursor-default relative overflow-hidden group">
+          <div className="absolute inset-0 bg-red-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
           <div className="bg-red-950/30 p-2 rounded-lg text-red-500"><AlertTriangle className="w-5 h-5" /></div>
           <div>
             <p className="text-xs text-slate-400">High Risk</p>
@@ -338,7 +346,8 @@ export function SecurityRadarChart({ findings = [], healthScore = 100 }: Securit
           </div>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center gap-4 border-l-2 border-l-yellow-500">
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center gap-4 border-l-2 border-l-yellow-500 animate-in zoom-in-95 fade-in duration-500 delay-[1100ms] fill-mode-both hover:-translate-y-1 hover:border-slate-600 transition-all cursor-default relative overflow-hidden group">
+          <div className="absolute inset-0 bg-yellow-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
           <div className="bg-yellow-950/30 p-2 rounded-lg text-yellow-500"><Target className="w-5 h-5" /></div>
           <div>
             <p className="text-xs text-slate-400">Medium Risk</p>
@@ -347,7 +356,8 @@ export function SecurityRadarChart({ findings = [], healthScore = 100 }: Securit
           </div>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center gap-4 border-l-2 border-l-blue-500">
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center gap-4 border-l-2 border-l-blue-500 animate-in zoom-in-95 fade-in duration-500 delay-[1200ms] fill-mode-both hover:-translate-y-1 hover:border-slate-600 transition-all cursor-default relative overflow-hidden group">
+          <div className="absolute inset-0 bg-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
           <div className="bg-blue-950/30 p-2 rounded-lg text-blue-400"><Info className="w-5 h-5" /></div>
           <div>
             <p className="text-xs text-slate-400">Low Risk</p>
@@ -356,7 +366,7 @@ export function SecurityRadarChart({ findings = [], healthScore = 100 }: Securit
           </div>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center gap-4">
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center gap-4 animate-in zoom-in-95 fade-in duration-500 delay-[1300ms] fill-mode-both hover:-translate-y-1 hover:border-slate-600 transition-all cursor-default">
           <div className="bg-emerald-950/30 p-2 rounded-lg text-emerald-500"><CheckCircle className="w-5 h-5" /></div>
           <div>
             <p className="text-xs text-slate-400">Last Scan</p>
