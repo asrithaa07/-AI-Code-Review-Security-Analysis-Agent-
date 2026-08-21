@@ -15,3 +15,14 @@ services:
         sync: false
       - key: JWT_SECRET_KEY
         generateValue: true
+
+  - type: web
+    name: ai-code-review-frontend
+    env: node
+    plan: free
+    rootDir: frontend
+    buildCommand: "npm install && npm run build"
+    startCommand: "npm run start"
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        value: "https://ai-code-review-backend-6ut3.onrender.com"
