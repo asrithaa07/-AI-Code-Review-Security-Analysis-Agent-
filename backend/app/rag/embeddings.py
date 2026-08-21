@@ -1,14 +1,17 @@
+import os
 from functools import lru_cache
 
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 from app.config import settings
 
 
 @lru_cache
-def get_embeddings() -> HuggingFaceEmbeddings:
-    return HuggingFaceEmbeddings(
-        model_name=settings.embedding_model,
-        model_kwargs={"device": "cpu"},
-        encode_kwargs={"normalize_embeddings": True},
+def get_embeddings() -> GoogleGenerativeAIEmbeddings:
+    api_key = settings.gemini_api_key or os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError("GEMINI_API_KEY must be set to initialize the knowledge base embeddings.")
+    return GoogleGenerativeAIEmbeddings(
+        model="models/embedding-001",
+        google_api_key=api_key
     )
