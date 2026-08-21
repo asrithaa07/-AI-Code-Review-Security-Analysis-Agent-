@@ -59,6 +59,16 @@ Your team will definitely ask what AI models are under the hood.
 4. **`frontend/src/components/security-radar-chart.tsx`**
    - **Why it matters:** The most visually impressive part of the frontend. Show this to demonstrate how we use complex React hooks to dynamically parse the security scan JSON and render the stunning, animated 8-axis data visualizations.
 
+## 6. Core REST API Endpoints
+*If the panel asks how the frontend and backend talk to each other, explain that we built a robust FastAPI REST backend:*
+
+- **`POST /api/v1/analyze/submit`**
+  - **The Workhorse:** This is the most crucial API. The frontend sends the raw source code payload here. It spins up the background LangGraph pipeline, saves the results to the SQLite database, and returns the unique `submission_id`.
+- **`POST /api/v1/chat/message`**
+  - **The Conversational Engine:** This API handles all live-chat queries. It accepts the user's question along with the current `submission_id` to provide secure, context-aware coding advice using ChromaDB RAG.
+- **`GET /api/v1/github/auth-url` & `POST /api/v1/auth/token`**
+  - **The Security Layer:** Demonstrates that the platform is production-ready. We enforce secure JWT (JSON Web Token) issuance and bcrypt password hashing before users can even access the portal.
+
 ---
 
 ### Tips for the Panel Presentation Tomorrow:
