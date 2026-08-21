@@ -42,6 +42,7 @@ export interface PRSummary {
   self_healing_metadata?: {
     rescan_passed: boolean;
     remediation_status?: string | null;
+    remediation_engine_used?: string | null;
     security_remediation_required?: boolean | null;
     remediation_error?: string | null;
     original_findings_count: number;
