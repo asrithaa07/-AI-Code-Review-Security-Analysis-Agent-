@@ -9,10 +9,6 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0 # Standardize python version on Render
-      - key: GEMINI_API_KEY
-        sync: false
-      - key: XAI_API_KEY
-        sync: false
       - key: JWT_SECRET_KEY
         generateValue: true
       - key: GITHUB_CLIENT_ID
@@ -21,8 +17,6 @@ services:
         value: "d7dccdef0c2a3444835ab291e6e7a0efd2a15a1e"
       - key: GITHUB_REDIRECT_URI
         value: "https://ai-code-review-frontend-ctu0.onrender.com"
-      - key: LLM_MODEL
-        value: "gemini-1.5-flash"
 
   - type: web
     name: ai-code-review-frontend
