@@ -301,6 +301,27 @@ async def run_agent_analysis_pipeline(submission_id: uuid.UUID) -> None:
             submission.status = SubmissionStatus.completed
             final_findings = result_state.get("remediated_findings") or result_state.get("merged_findings") or syntax_findings
             
+            # --- CRITICAL UI FEEDBACK PATCH ---
+            # If any individual LangGraph agent failed (e.g. invalid API key caught inside code_analysis),
+            # force those errors to be visible as red critical findings on the UI instead of returning 0 findings!
+            if errors:
+                for idx, err_msg in enumerate(errors):
+                    final_findings.append({
+                        "id": str(uuid.uuid4()),
+                        "agent_source": "system_error",
+                        "category": "infrastructure_failure",
+                        "severity": "critical",
+                        "title": "Agent Pipeline Error (Invalid API Key)",
+                        "description": f"The LLM Agent failed to process: {err_msg}. This almost certainly means your Google API Key is invalid or rate-limited.",
+                        "line_number": 1,
+                        "cwe_id": "CWE-287",
+                        "owasp_category": "A07:2021-Identification and Authentication Failures",
+                        "remediation_summary": "Make sure your Google Gemini API key starts with exactly 'AIzaSy'.",
+                        "corrected_code": submission.source_code,
+                        "best_practice_explanation": "Cloud security tools require valid LLM API keys with proper limits."
+                    })
+            # -----------------------------------
+            
             # Sort findings by line number
             def get_sort_key(item):
                 ln = item.get("line_number")
