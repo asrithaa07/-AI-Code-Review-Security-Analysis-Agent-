@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from langgraph.graph import START, END, StateGraph
 from app.agents.code_analysis import analyze_code_quality
 from app.agents.security_vulnerability import scan_security_vulnerabilities
-from app.agents.remediation import generate_remediations, generate_full_remediated_code, run_self_healing_remediation, normalize_code
+from app.agents.remediation import generate_remediations, generate_full_remediated_code, run_self_healing_remediation, normalize_code, heal_syntax_and_quality_code
 from app.agents.pr_summary import generate_pr_summary, calculate_health_score
 from app.models.submission import CodeSubmission, SubmissionStatus
 from app.database import SessionLocal
@@ -233,7 +233,6 @@ async def run_agent_analysis_pipeline(submission_id: uuid.UUID) -> None:
                 remediated_code = src_code
 
             # Fallback static syntax fix if code remains unchanged or has syntax errors
-            from app.agents.remediation import heal_syntax_and_quality_code
             remediated_code = heal_syntax_and_quality_code(remediated_code, submission.language.value)
 
             # Re-scan remediated code to check if syntax error is fixed
@@ -382,7 +381,6 @@ async def run_agent_analysis_pipeline(submission_id: uuid.UUID) -> None:
         if submission:
             print(f"[PIPELINE ERROR FALLBACK] Orchestrator exception caught ({e}). Executing fail-safe self-healing remediation...")
             try:
-                from app.agents.remediation import heal_syntax_and_quality_code
                 healed_src = heal_syntax_and_quality_code(submission.source_code or "", submission.language.value)
                 self_healing_res = run_self_healing_remediation(healed_src, submission.language.value, [])
                 
