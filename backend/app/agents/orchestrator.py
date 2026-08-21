@@ -407,12 +407,28 @@ async def run_agent_analysis_pipeline(submission_id: uuid.UUID) -> None:
             except Exception as inner_ex:
                 print(f"[PIPELINE CRITICAL] Fail-safe remediation fallback error ({inner_ex})")
                 submission.status = SubmissionStatus.completed
-                submission.health_score = 100
+                submission.health_score = 50
+                original_findings = []
+                original_findings.append({
+                    "id": str(uuid.uuid4()),
+                    "agent_source": "system_error",
+                    "category": "infrastructure_failure",
+                    "severity": "critical",
+                    "title": "LLM API Failure / Authentication Error",
+                    "description": f"The backend AI pipeline crashed processing your request. Both primary and backup paths failed. Detailed Error: {str(e)} | Inner Error: {str(inner_ex)}",
+                    "line_number": 1,
+                    "cwe_id": "CWE-287",
+                    "owasp_category": "A07:2021-Identification and Authentication Failures",
+                    "remediation_summary": "Your Google Gemini API Key is invalid or rate limited. Check your GEMINI_API_KEY environment variables in the Render Dashboard. Google Generative AI keys usually start with 'AIzaSy'. Make sure you copy the exact key correctly.",
+                    "corrected_code": submission.source_code,
+                    "best_practice_explanation": "Cloud security tools require valid LLM API keys with proper limits."
+                })
+                submission.findings = original_findings
                 submission.pr_summary = {
-                    "title": f"Code Analysis — {submission.language.value.upper()}",
-                    "executive_overview": "Source code verified and processed by analysis engine.",
+                    "title": f"Critical Pipeline Error — {submission.language.value.upper()}",
+                    "executive_overview": f"CRITICAL PIPELINE FAILURE: The AI workflow encountered an unhandled exception: {str(inner_ex)}. This means the API Key you provided is invalid or has expired.",
                     "full_remediated_code": submission.source_code or "",
-                    "summary": "Code analysis completed."
+                    "summary": f"System error caught: {str(inner_ex)}"
                 }
             db.commit()
     finally:
