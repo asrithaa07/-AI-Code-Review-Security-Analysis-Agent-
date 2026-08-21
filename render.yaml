@@ -1,3 +1,4 @@
+services:
   - type: web
     name: ai-code-review-backend
     env: python
