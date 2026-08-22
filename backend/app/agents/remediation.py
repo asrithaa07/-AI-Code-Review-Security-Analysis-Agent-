@@ -701,7 +701,7 @@ def generate_full_remediated_code(source_code: str, language: str, findings: Lis
                         clean_text = extract_single_source_file(res.text)
                         clean_text = sanitize_comments(clean_text, language)
                         clean_text = remove_duplicate_consecutive_comments(clean_text)
-                        return clean_text, "Gemini AI Engine"
+                        return clean_text, ""
                 except Exception as e:
                     gemini_error = str(e)
                     print(f"[REMEDIATION] WARN: Gemini full code remediation call failed on '{attempt_model}' ({e}).")
@@ -746,16 +746,16 @@ def generate_full_remediated_code(source_code: str, language: str, findings: Lis
                 clean_text = sanitize_comments(clean_text, language)
                 clean_text = remove_duplicate_consecutive_comments(clean_text)
 
-                return clean_text, "Groq / Llama AI Engine"
+                return clean_text, ""
         except Exception as e:
             groq_error = str(e)
             print(f"[REMEDIATION] WARN: Groq full code remediation call failed ({e}).")
 
-    # Surgical Patch Refactoring Engine (AST-based code refactoring)
-    print(f"[REMEDIATION] Executing AST Refactoring Engine... (Gemini Error: {gemini_error if 'gemini_error' in locals() else 'None'} | Groq Error: {groq_error if 'groq_error' in locals() else 'None'})")
+    # Dynamic Code Refactoring
+    print(f"[REMEDIATION] Executing Dynamic Code Refactoring... (Gemini Error: {gemini_error if 'gemini_error' in locals() else 'None'} | Groq Error: {groq_error if 'groq_error' in locals() else 'None'})")
     raw_patched = _generate_dynamic_full_remediated_code(source_code, language, target_findings)
     patched_code = remove_duplicate_consecutive_comments(sanitize_comments(raw_patched, language))
-    return patched_code, "AST Surgical Refactoring Engine"
+    return patched_code, ""
 
 
 def run_self_healing_remediation(
@@ -772,8 +772,8 @@ def run_self_healing_remediation(
     4. Runs post-remediation security re-scan on candidate code.
     5. Returns complete structured status payload.
     """
-    from app.agents.security_vulnerability import scan_security_vulnerabilities
-    from app.agents.code_analysis import analyze_code_quality
+    from app.agents.security_vulnerability import perform_static_security_scan
+    from app.agents.code_analysis import perform_dynamic_code_analysis
     from app.services.code_validator import validate_code
 
     orig_sha256 = get_code_sha256(uploaded_source_code)
@@ -785,10 +785,6 @@ def run_self_healing_remediation(
 
     print(f"[REMEDIATION] INITIAL FINDINGS: Total={len(initial_findings)}, Security={len(sec_findings)}, Quality={len(qual_findings)}")
 
-    # CASE 1: NO FINDINGS AT ALL (Disabled)
-    # The pipeline is now configured to forcefully execute General Code Optimization even when 0 findings exist.
-
-    # CASE 2: FINDINGS EXIST -> RUN REMEDIATION LOOP FOR ALL FINDINGS (SECURITY, QUALITY, SYNTAX)
     remediation_input_code = uploaded_source_code
     current_target_findings = initial_findings.copy()
     attempts_history = []
@@ -798,7 +794,7 @@ def run_self_healing_remediation(
     post_remediation_qual_findings = qual_findings.copy()
     validation_passed = True
     rescan_security = []
-    current_engine_used = "Static Fallback"
+    current_engine_used = ""
 
     for attempt in range(1, max_attempts + 1):
         print(f"[REMEDIATION] RE-SCAN ATTEMPT {attempt}/{max_attempts} START...")
@@ -826,10 +822,10 @@ def run_self_healing_remediation(
 
         validation_passed = True
 
-        # 3. Post-Remediation Security Re-Scan (MUST scan candidate_code)
+        # 3. Post-Remediation Security Re-Scan (Uses static scanner to protect LLM API key quota)
         print(f"[REMEDIATION] RUNNING POST-REMEDIATION SCAN ON CANDIDATE CODE (SHA-256: {candidate_sha256})...")
-        rescan_security = scan_security_vulnerabilities(candidate_code, language)
-        rescan_quality = analyze_code_quality(candidate_code, language)
+        rescan_security = perform_static_security_scan(candidate_code, language)
+        rescan_quality = perform_dynamic_code_analysis(candidate_code, language)
 
         post_remediation_sec_findings = rescan_security
         post_remediation_qual_findings = rescan_quality
