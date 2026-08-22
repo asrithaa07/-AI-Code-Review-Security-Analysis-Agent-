@@ -364,14 +364,31 @@ def _generate_dynamic_full_remediated_code(source_code: str, language: str, find
         elif language.lower() == "java" and "executeQuery(sql)" in stripped:
             line = f"{indent}return stmt.executeQuery();"
 
-        # 4. Command Injection
-        elif any(ci in stripped for ci in ["os.system(", "subprocess.Popen(", "eval(", "exec(", "Runtime.getRuntime().exec("]):
+        # 4a. Unsafe dynamic evaluation -> safe literal evaluation (preserves semantics)
+        elif language.lower() == "python" and re.search(r"(?<![\w.])eval\(", stripped) and not stripped.startswith("#"):
+            line = re.sub(r"(?<![\w.])eval\(", "ast.literal_eval(", line)
+
+        # 4b. Dangerous dynamic execution removed entirely (cannot be made safe statically)
+        elif language.lower() == "python" and re.search(r"(?<![\w.])exec\(", stripped) and not stripped.startswith("#"):
+            var_name = stripped.split("=")[0].strip() if "=" in stripped else None
+            guard = f"{var_name} = None  # dynamic exec() removed for security" if var_name else f"pass  # dynamic exec() removed for security"
+            line = f"{indent}{guard}"
+
+        # 4c. Command Injection - rebuild shell call as argument list preserving the base command
+        elif any(ci in stripped for ci in ["os.system(", "subprocess.Popen(", "os.popen(", "Runtime.getRuntime().exec("]):
             if language.lower() == "python":
-                arg_match = re.search(r"os\.system\(.*?\+\s*([a-zA-Z0-9_]+)", stripped)
-                arg_name = arg_match.group(1) if arg_match else "server_ip"
+                lit_match = re.search(r"[\"']([^\"']*)[\"']\s*\+\s*([a-zA-Z_][a-zA-Z0-9_]*)", stripped)
+                if lit_match:
+                    tokens = lit_match.group(1).split()
+                    var_name = lit_match.group(2)
+                    if not tokens:
+                        tokens = ["echo"]
+                    arg_list = ", ".join([f'"{t}"' for t in tokens] + [var_name])
+                else:
+                    arg_list = '"cmd"'
                 line = (
                     f"{indent}import subprocess\n"
-                    f"{indent}subprocess.run([\"ping\", \"-c\", \"1\", {arg_name}], check=True)"
+                    f"{indent}subprocess.run([{arg_list}], check=False, shell=False)"
                 )
             else:
                 arg_match = re.search(r"\+\s*([a-zA-Z0-9_\.]+)", stripped)
@@ -380,6 +397,10 @@ def _generate_dynamic_full_remediated_code(source_code: str, language: str, find
                     f"{indent}ProcessBuilder pb = new ProcessBuilder(\"ping\", \"-c\", \"1\", {arg_name});\n"
                     f"{indent}pb.start();"
                 )
+
+        # 4d. Shell invocation via shell=True -> shell=False
+        elif language.lower() == "python" and re.search(r"shell\s*=\s*True", stripped):
+            line = re.sub(r"shell\s*=\s*True", "shell=False", line)
 
         # 5. XSS surgical patch
         elif "innerHTML" in stripped and not stripped.startswith("//") and not stripped.startswith("#"):
@@ -408,6 +429,19 @@ def _generate_dynamic_full_remediated_code(source_code: str, language: str, find
         # 5f. Weak JWT 'none' algorithm
         elif re.search(r"algorithm\s*[=:]\s*[\"']none[\"']", stripped):
             line = re.sub(r"algorithm\s*[=:]\s*[\"']none[\"']", "algorithm=\"HS256\"", line)
+
+        # 5g. jwt.decode without explicit algorithm allowlist -> algorithm confusion attack
+        elif language.lower() == "python" and "jwt.decode(" in stripped and "algorithms" not in stripped:
+            if stripped.rstrip().endswith(")"):
+                line = line.rstrip()[:-1].rstrip().rstrip(",") + ', algorithms=["HS256"])'
+
+        # 5h. Weak hash via hashlib.new("md5"/"sha1")
+        elif language.lower() == "python" and re.search(r'hashlib\.new\(\s*["\'](md5|sha1)["\']', stripped, re.IGNORECASE):
+            line = re.sub(r'hashlib\.new\(\s*["\'](md5|sha1)["\']', 'hashlib.new("sha256"', line, flags=re.IGNORECASE)
+
+        # 5i. Plain HTTP URL carrying auth/session context -> HTTPS
+        elif re.search(r'http://', stripped) and any(k in stripped.lower() for k in ["login", "auth", "password", "token", "session", "api_key", "apikey"]):
+            line = line.replace("http://", "https://")
 
         # 6. Deep Nesting / Arrow Anti-Pattern static refactor
         elif any(f.get("category") == "complexity" or "nested" in str(f.get("title", "")).lower() for f in findings) and ("if (" in stripped or "if(" in stripped):
@@ -445,6 +479,8 @@ def _generate_dynamic_full_remediated_code(source_code: str, language: str, find
         raw_code = "import secrets\n" + raw_code
     if "bcrypt.hashpw(" in raw_code and "import bcrypt" not in raw_code:
         raw_code = "import bcrypt\n" + raw_code
+    if "ast.literal_eval(" in raw_code and "import ast" not in raw_code:
+        raw_code = "import ast\n" + raw_code
 
     return heal_syntax_and_quality_code(raw_code, language)
 
@@ -640,32 +676,45 @@ def generate_full_remediated_code(source_code: str, language: str, findings: Lis
 
     api_key = settings.gemini_api_key or os.environ.get("GEMINI_API_KEY")
     if api_key:
+        from app.services.model_resolver import invalidate_model_cache
         try:
             print("[REMEDIATION] LLM CALL INITIATED - Option 1 Full Source Remediation Prompt (Security + Quality)...")
             genai.configure(api_key=api_key)
-            model = genai.GenerativeModel(
-                model_name=get_active_llm_model(),
-                system_instruction=FULL_REMEDIATION_SYSTEM_PROMPT
-            )
-            # Add strict generation configurations for experimental 3.6-flash environments
-            res = model.generate_content(
-                prompt,
-                generation_config=genai.types.GenerationConfig(
-                    max_output_tokens=8192,
-                    temperature=0.1
-                )
-            )
-            print(f"[REMEDIATION] LLM RESPONSE RECEIVED - Text length: {len(res.text)}")
 
-            clean_text = extract_single_source_file(res.text)
-            clean_text = sanitize_comments(clean_text, language)
-            clean_text = remove_duplicate_consecutive_comments(clean_text)
+            # Retry across alive models if the resolved model is rejected (retired/404/not found)
+            gemini_error = None
+            for attempt_model in [get_active_llm_model(), "gemini-flash-latest", "gemini-2.5-flash"]:
+                try:
+                    model = genai.GenerativeModel(
+                        model_name=attempt_model,
+                        system_instruction=FULL_REMEDIATION_SYSTEM_PROMPT
+                    )
+                    # Add strict generation configurations for experimental 3.6-flash environments
+                    res = model.generate_content(
+                        prompt,
+                        generation_config=genai.types.GenerationConfig(
+                            max_output_tokens=8192,
+                            temperature=0.1
+                        )
+                    )
+                    print(f"[REMEDIATION] LLM RESPONSE RECEIVED via {attempt_model} - Text length: {len(res.text)}")
 
-            is_valid, validation_errors = validate_remediated_code(clean_text, language, target_findings, source_code)
-            print(f"[REMEDIATION] LLM CANDIDATE SHA-256: {get_code_sha256(clean_text)}, Syntax Valid: {is_valid}")
+                    clean_text = extract_single_source_file(res.text)
+                    clean_text = sanitize_comments(clean_text, language)
+                    clean_text = remove_duplicate_consecutive_comments(clean_text)
 
-            # FORCED BYPASS: Return Gemini's output unconditionally even if it truncates or hallucinates
-            return clean_text, "Gemini 3.6 Flash"
+                    is_valid, validation_errors = validate_remediated_code(clean_text, language, target_findings, source_code)
+                    print(f"[REMEDIATION] LLM CANDIDATE SHA-256: {get_code_sha256(clean_text)}, Syntax Valid: {is_valid}")
+
+                    # FORCED BYPASS: Return Gemini's output unconditionally even if it truncates or hallucinates
+                    return clean_text, "Gemini"
+                except Exception as e:
+                    gemini_error = str(e)
+                    print(f"[REMEDIATION] WARN: Gemini full code remediation call failed on '{attempt_model}' ({e}).")
+                    if any(sig in gemini_error.lower() for sig in ["not found", "404", "is not supported", "does not exist", "deprecated"]):
+                        invalidate_model_cache()
+                        continue  # try next candidate model
+                    break  # auth/quota/network errors will not be fixed by another model name
         except Exception as e:
             gemini_error = str(e)
             print(f"[REMEDIATION] WARN: Gemini full code remediation call failed ({e}).")
