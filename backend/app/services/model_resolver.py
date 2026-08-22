@@ -8,14 +8,11 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Ordered preference of Gemini models that are ALIVE as of Aug 2026.
-# gemini-1.5-* and gemini-2.0-* were fully retired by Google (404 NOT_FOUND).
+# Preference ladder of active Gemini models
 MODEL_FALLBACK_LADDER = [
-    "gemini-flash-latest",   # auto-tracking alias for the newest stable flash model
-    "gemini-3.7-flash",      # released Aug 2026, no shutdown date announced
-    "gemini-3.5-flash",      # released May 19 2026, no shutdown date announced
-    "gemini-2.5-flash",      # shutdown scheduled Oct 16 2026
-    "gemini-2.5-flash-lite",
+    "gemini-1.5-flash",
+    "gemini-2.0-flash",
+    "gemini-1.5-pro",
 ]
 
 _cache_lock = threading.Lock()

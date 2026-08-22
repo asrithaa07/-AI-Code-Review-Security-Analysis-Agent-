@@ -188,11 +188,14 @@ def analyze_code_quality(source_code: str, language: str) -> List[dict]:
             try:
                 import openai
                 import json
-                client = openai.OpenAI(api_key=xai_api_key, base_url="https://api.groq.com/openai/v1")
-                # llama-3.3-70b-versatile retired; try current Groq catalog in order
+                client = openai.OpenAI(
+                    api_key=xai_api_key,
+                    base_url="https://api.groq.com/openai/v1",
+                    timeout=15.0
+                )
+                groq_models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "llama3-70b-8192", "mixtral-8x7b-32768"]
                 res = None
-                last_err = None
-                for groq_model in ["openai/gpt-oss-120b", "qwen/qwen3.6-27b", "groq/compound-mini"]:
+                for groq_model in groq_models:
                     try:
                         res = client.chat.completions.create(
                             model=groq_model,
@@ -202,17 +205,16 @@ def analyze_code_quality(source_code: str, language: str) -> List[dict]:
                             ],
                             response_format={"type": "json_object"}
                         )
+                        print(f"[CODE ANALYSIS] Groq model '{groq_model}' responded successfully.")
                         break
                     except Exception as model_err:
-                        last_err = model_err
-                        if any(sig in str(model_err).lower() for sig in ["not found", "404", "does not exist"]):
-                            continue
-                        raise
-                if res is None:
-                    raise RuntimeError(f"All Groq models failed: {last_err}")
-                data = json.loads(res.choices[0].message.content)
-                if "findings" in data: return data["findings"]
-                return data
+                        print(f"[CODE ANALYSIS] WARN: Groq model '{groq_model}' failed ({model_err}).")
+                        continue
+
+                if res and res.choices and res.choices[0].message.content:
+                    data = json.loads(res.choices[0].message.content)
+                    if "findings" in data: return data["findings"]
+                    return data
             except Exception as ex:
                 print(f"WARN: Groq code analysis fallback failed ({ex}). Falling back to static engine.")
                 return perform_dynamic_code_analysis(source_code, language)
