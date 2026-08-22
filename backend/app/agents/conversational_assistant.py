@@ -126,7 +126,7 @@ def generate_assistant_response(
         code_snippet = submission_context.get("source_code", "")
         findings = submission_context.get("findings", [])
 
-    # 2. Fast Gemini LLM Attempt with 3.0s strict timeout
+    # 2. Gemini LLM Attempt with 5.0s timeout
     api_key = settings.gemini_api_key or os.environ.get("GEMINI_API_KEY")
     if api_key:
         try:
@@ -147,10 +147,10 @@ def generate_assistant_response(
                 f"{submission_text}\n"
                 f"Developer Question: {user_message}\n\n"
                 "Provide a comprehensive, clear, structured markdown response with code examples:\n"
-                "NOTE: If developer asks 'what is [topic] and is it in my code', explain the topic FIRST (what it is, fix, code example) and THEN state if it's present in their code."
+                "NOTE: If developer asks about issues or code, explain the flagged findings, vulnerabilities, or code quality improvements clearly."
             )
 
-            llm_text = _execute_with_timeout(model.generate_content, args=(prompt,), timeout_sec=1.5)
+            llm_text = _execute_with_timeout(model.generate_content, args=(prompt,), timeout_sec=5.0)
             if llm_text and hasattr(llm_text, "text") and llm_text.text:
                 return {"reply": llm_text.text, "rag_sources": retrieved_chunks}
         except Exception as e:
@@ -171,14 +171,14 @@ def generate_assistant_response(
                         {"role": "user", "content": prompt}
                     ]
                 }, 
-                timeout_sec=1.5
+                timeout_sec=3.0
             )
             if completion and completion.choices and completion.choices[0].message.content:
                 return {"reply": completion.choices[0].message.content, "rag_sources": retrieved_chunks}
         except Exception as e:
             print(f"xAI call warning ({e}). Falling back to instant synthesis engine.")
 
-    # 3. Instant Dynamic Synthesis Engine (Sub-50ms)
+    # 3. Instant Dynamic Synthesis Engine (Fallback)
     lowered = user_message.lower()
     normalized_msg = lowered.replace("-", " ").replace("_", " ")
 
@@ -189,25 +189,27 @@ def generate_assistant_response(
             matched_topic = t_info
             break
 
-    # Check if user is asking about their specific submission or findings
-    is_submission_query = submission_context and any(kw in normalized_msg for kw in [
-        "my code", "submission", "finding", "vulnerab", "issues in my", "flagged", "health score", "scan result", "is it present", "in my code"
+    # Comprehensive submission query matching
+    is_submission_query = bool(submission_context) or any(kw in normalized_msg for kw in [
+        "code", "issue", "issues", "finding", "findings", "vulnerab", "bug", "bugs",
+        "error", "errors", "scan", "my code", "submission", "flagged", "health score",
+        "result", "present", "explain", "fix", "help", "what", "how"
     ])
 
     reply_sections = []
 
-    # 1. ALWAYS FIRST: Explain Topic if query matches any topic (e.g., SQL Injection, Secrets, Guard Clauses, OWASP, etc.)
+    # 1. Topic Explanation
     if matched_topic:
         reply_sections.append(f"### {matched_topic['name']}\n")
         reply_sections.append(f"**What is it?**\n{matched_topic['what_is_it']}\n")
         reply_sections.append(f"**How to Fix & Prevent it:**\n{matched_topic['fix_guide']}\n")
         reply_sections.append(f"**Production-Ready Code Example:**\n{matched_topic['code_example']}")
 
-    # 2. THEN SECOND: Provide Submitted Code Scan Status if submission context exists or query asks about code
+    # 2. Submission Details & Findings
     if is_submission_query or (matched_topic and submission_context):
-        reply_sections.append(f"### Submitted Code Scan Status ({lang.upper()})")
+        reply_sections.append(f"### Submitted Code Analysis Report ({lang.upper()})")
         
-        # Check if the matched topic is in the findings
+        # Check if matched topic matches any finding
         matching_finding = None
         if matched_topic and findings:
             for f in findings:
@@ -218,60 +220,55 @@ def generate_assistant_response(
                     matching_finding = f
                     break
 
-        if matched_topic:
-            if matching_finding:
-                line = matching_finding.get("line_number")
+        if matched_topic and matching_finding:
+            line = matching_finding.get("line_number")
+            line_str = f" (Line {line})" if line else ""
+            desc = matching_finding.get("description", matched_topic["what_is_it"])
+            remediation = matching_finding.get("remediation_summary", matched_topic["fix_guide"])
+            corrected = matching_finding.get("corrected_code", "")
+            
+            reply_sections.append(
+                f"**Scan Result:** YES, **{matched_topic['name']}** IS present in your submitted code{line_str}.\n\n"
+                f"**Flagged Issue Details:**\n{desc}\n\n"
+                f"**Recommended Fix for Your Code:**\n{remediation}\n"
+                + (f"```python\n{corrected.strip()}\n```" if corrected else "")
+            )
+        elif findings:
+            reply_sections.append(f"Your submitted code has **{len(findings)} flagged finding(s)**:\n")
+            for idx, f in enumerate(findings, 1):
+                sev = str(f.get("severity", "info")).upper()
+                title = f.get("title", "Flagged Finding")
+                desc = f.get("description", "")
+                line = f.get("line_number")
                 line_str = f" (Line {line})" if line else ""
-                desc = matching_finding.get("description", matched_topic["what_is_it"])
-                remediation = matching_finding.get("remediation_summary", matched_topic["fix_guide"])
-                corrected = matching_finding.get("corrected_code", "")
-                
-                reply_sections.append(
-                    f"**Scan Result:** YES, **{matched_topic['name']}** IS present in your submitted code{line_str}.\n\n"
-                    f"**Flagged Issue Details:**\n{desc}\n\n"
-                    f"**Recommended Fix for Your Code:**\n{remediation}\n"
-                    + (f"```python\n{corrected.strip()}\n```" if corrected else "")
-                )
-            else:
-                reply_sections.append(
-                    f"**Scan Result:** NO, **{matched_topic['name']}** was NOT detected in your submitted code. Your code passed this security rule (100/100 Health Score)."
-                )
+                remediation = f.get("remediation_summary", "")
+                corrected = f.get("corrected_code", "")
+
+                sec_text = f"**{idx}. [{sev}] {title}**{line_str}\n"
+                sec_text += f"- **Explanation:** {desc}\n"
+                if remediation:
+                    sec_text += f"- **Recommended Fix:** {remediation}\n"
+                if corrected:
+                    sec_text += f"```python\n{corrected.strip()}\n```\n"
+                reply_sections.append(sec_text)
         else:
-            if findings:
-                reply_sections.append(f"Your submitted code has **{len(findings)} flagged finding(s)**:\n")
-                for idx, f in enumerate(findings, 1):
-                    sev = str(f.get("severity", "info")).upper()
-                    title = f.get("title", "Flagged Finding")
-                    desc = f.get("description", "")
-                    line = f.get("line_number")
-                    line_str = f" (Line {line})" if line else ""
-                    remediation = f.get("remediation_summary", "")
-                    corrected = f.get("corrected_code", "")
+            reply_sections.append("Your submitted source code passed all security & quality rule scans with a **100/100 Health Score**! No active vulnerabilities were detected.")
 
-                    sec_text = f"**{idx}. [{sev}] {title}**{line_str}\n"
-                    sec_text += f"- **Explanation:** {desc}\n"
-                    if remediation:
-                        sec_text += f"- **Recommended Fix:** {remediation}\n"
-                    if corrected:
-                        sec_text += f"```python\n{corrected.strip()}\n```\n"
-                    reply_sections.append(sec_text)
-            else:
-                reply_sections.append("Your submitted source code passed all security & quality rule scans with a **100/100 Health Score**! No active vulnerabilities were detected.")
-
-    # 3. Fallback General Question (if neither topic nor submission query matched)
+    # 3. Knowledge Base Guidance Fallback
     elif not matched_topic:
         if retrieved_chunks:
             top_c = retrieved_chunks[0]
             c_text = top_c.get("content", "").strip()[:800]
             reply_sections.append(f"### Knowledge Base Guidance on \"{user_message}\"\n")
             reply_sections.append(f"{c_text}\n")
-            reply_sections.append("**Core Engineering Best Practices:**\n"
-                                 "1. **Input Hygiene**: Never trust external user input; validate using schemas.\n"
-                                 "2. **Parameterization**: Separate code instructions from input data.\n"
-                                 "3. **Secrets Isolation**: Always load keys from environment variables (`os.environ`).\n"
-                                 "4. **Clean Code**: Keep method length concise and use guard clauses for early returns.")
         else:
-            reply_sections.append("Please ask questions related to these topics only.")
+            reply_sections.append(f"### Secure Coding & Architecture Guidance\n")
+            reply_sections.append(
+                f"Here is expert guidance regarding your question **\"{user_message}\"**:\n\n"
+                "1. **Security Vulnerability Scanning**: Our AST scanner evaluates code against OWASP Top 10 guidelines (SQL Injection, Secrets, XSS, Auth).\n"
+                "2. **Code Quality Refactoring**: We eliminate Arrow Anti-Pattern nested conditionals using guard clauses.\n"
+                "3. **Remediation & Diff Generation**: Clean, secure code diffs are generated automatically for every submission."
+            )
 
     final_reply = "\n\n".join(reply_sections)
     return {"reply": final_reply, "rag_sources": retrieved_chunks}
