@@ -702,26 +702,8 @@ def run_self_healing_remediation(
 
     print(f"[REMEDIATION] INITIAL FINDINGS: Total={len(initial_findings)}, Security={len(sec_findings)}, Quality={len(qual_findings)}")
 
-    # CASE 1: NO FINDINGS AT ALL
-    if len(initial_findings) == 0:
-        print(f"[REMEDIATION] CASE: 0 Findings. Remediation Status: 'no_vulnerabilities'. Code unchanged.")
-        return {
-            "original_findings": initial_findings,
-            "remediated_code": uploaded_source_code,
-            "full_remediated_code": uploaded_source_code,
-            "remaining_findings": [],
-            "fixed_findings": [],
-            "attempts": 0,
-            "validation_passed": True,
-            "all_vulnerabilities_fixed": True,
-            "rescan_passed": True,
-            "original_findings_count": 0,
-            "rescan_findings_count": 0,
-            "fixed_findings_count": 0,
-            "remediation_status": "no_vulnerabilities",
-            "security_remediation_required": False,
-            "remediation_error": None
-        }
+    # CASE 1: NO FINDINGS AT ALL (Disabled)
+    # The pipeline is now configured to forcefully execute General Code Optimization even when 0 findings exist.
 
     # CASE 2: FINDINGS EXIST -> RUN REMEDIATION LOOP FOR ALL FINDINGS (SECURITY, QUALITY, SYNTAX)
     remediation_input_code = uploaded_source_code
