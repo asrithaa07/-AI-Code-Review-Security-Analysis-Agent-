@@ -227,7 +227,7 @@ async def run_agent_analysis_pipeline(submission_id: uuid.UUID) -> None:
 
             # Run AI Remediation on Syntax Findings to generate fixed source code
             try:
-                remediated_code = generate_full_remediated_code(src_code, submission.language.value, syntax_findings)
+                remediated_code, _ = generate_full_remediated_code(src_code, submission.language.value, syntax_findings)
             except Exception as ex:
                 print(f"[PIPELINE] AI Remediation failed for syntax error ({ex}), applying fallback static syntax fixer...")
                 remediated_code = src_code
