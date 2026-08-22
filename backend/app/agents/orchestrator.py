@@ -12,6 +12,7 @@ from app.agents.remediation import generate_remediations, generate_full_remediat
 from app.agents.pr_summary import generate_pr_summary, calculate_health_score
 from app.models.submission import CodeSubmission, SubmissionStatus
 from app.database import SessionLocal
+from app.services.code_validator import validate_code
 
 
 class AgentState(TypedDict):
