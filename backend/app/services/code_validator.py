@@ -1,4 +1,5 @@
 import ast
+import re
 from dataclasses import dataclass
 
 import javalang
@@ -10,6 +11,113 @@ from app.models.submission import Language
 class ValidationResult:
     is_valid: bool
     errors: list[dict]
+
+
+# Extensions that can never contain Python/Java source text
+NON_CODE_EXTENSIONS = (
+    ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".ico",
+    ".tiff", ".tif", ".heic", ".pdf", ".doc", ".docx", ".xls", ".xlsx",
+    ".ppt", ".pptx", ".zip", ".rar", ".7z", ".tar", ".gz", ".exe", ".dll",
+    ".mp4", ".mov", ".avi", ".mp3", ".wav",
+)
+
+# Magic bytes of common binary/image formats (checked against decoded latin-1 head)
+_BINARY_MAGICS = (
+    "\x89PNG",      # PNG
+    "\xff\xd8\xff", # JPEG
+    "GIF8",         # GIF87a / GIF89a
+    "%PDF",         # PDF
+    "PK\x03\x04",   # ZIP / docx / xlsx
+    "Rar!",         # RAR
+    "7z\xbc\xaf",   # 7Z
+    "MZ",           # EXE/DLL
+    "\x1f\x8b",     # GZIP
+    "BM\x00\x00\x00\x00\x00",  # BMP (with size placeholder)
+)
+
+_FILENAME_ONLY_RE = re.compile(
+    r"^[\w\-\\/ :().]*[\w\- ]+\.(png|jpe?g|gif|bmp|webp|svg|ico|tiff?|heic|pdf|docx?|xlsx?|pptx?|zip|rar|7z|exe|dll|mp[34]|mov|avi|wav)$",
+    re.IGNORECASE,
+)
+
+_CODE_TOKEN_RE = re.compile(
+    r"(?:\bdef\b|\bclass\b|\bimport\b|\bfrom\b|\breturn\b|\bprint\s*\(|\bif\b|\bfor\b|\bwhile\b"
+    r"|\bpublic\b|\bprivate\b|\bprotected\b|\bstatic\b|\bvoid\b|\bnew\b|\bSystem\.out\b"
+    r"|\bpackage\b|\blambda\b|\belif\b|\bexcept\b|\btry\b|\bcatch\b|\bthrows?\b"
+    r"|==|!=|<=|>=|&&|\|\||=>|->|::)",
+)
+
+_STRUCTURAL_CHARS = set("=;(){}[]<>:+-*/%")
+
+_ALLOWED_CONTROL_CHARS = set("\t\n\r")
+
+
+def detect_non_code_input(source_code: str, filename: str | None = None) -> str | None:
+    """
+    Detects submissions that are not real Python/Java source text (screenshots,
+    images, binary blobs, bare filenames, prose). Returns a user-friendly reason
+    string when the input should be rejected, or None when acceptable.
+    """
+    if filename:
+        lowered_name = filename.lower()
+        if lowered_name.endswith(NON_CODE_EXTENSIONS):
+            return (
+                f"'{filename}' is not a source code file. Screenshots and images cannot be analyzed - "
+                "please paste your Python or Java code as plain text, or upload a .py/.java file."
+            )
+
+    if not source_code or not source_code.strip():
+        return "Submitted content is empty."
+
+    # Binary image/blob signatures at the start of the payload
+    head = source_code[:64].encode("utf-8", errors="ignore").decode("latin-1", errors="ignore")
+    for magic in _BINARY_MAGICS:
+        if head.startswith(magic):
+            return (
+                "The submitted content looks like a binary file (image/PDF/archive), not source code. "
+                "This tool analyzes Python or Java code as plain text only."
+            )
+
+    # Pasted screenshot / embedded image data URI
+    if re.search(r"data:image/[a-zA-Z]+;base64,", source_code[:2000]):
+        return (
+            "Screenshots and embedded images cannot be analyzed. "
+            "Please paste your Python or Java code as plain text."
+        )
+
+    # Control characters that never appear in legitimate source files
+    forbidden_controls = [
+        ch for ch in source_code[:5000]
+        if ord(ch) < 32 and ch not in _ALLOWED_CONTROL_CHARS
+    ]
+    if len(forbidden_controls) > 5:
+        return (
+            "The submitted content contains binary data, not readable source code. "
+            "Please paste your Python or Java code as plain text."
+        )
+
+    stripped = source_code.strip()
+    lines = [ln.strip() for ln in stripped.splitlines() if ln.strip()]
+
+    # Bare filename / dropped-file path artifact (e.g. "image.png" or C:\\...\\image.png)
+    non_comment_lines = [ln for ln in lines if not ln.startswith("#") and not ln.startswith("//")]
+    if non_comment_lines and all(_FILENAME_ONLY_RE.match(ln) for ln in non_comment_lines):
+        sample = non_comment_lines[0]
+        return (
+            f"'{sample}' looks like a file name, not source code. "
+            "Screenshots/images cannot be analyzed - paste your actual Python or Java code as text."
+        )
+
+    # No recognizable code tokens AND no structural characters -> prose/garbage
+    token_hits = len(_CODE_TOKEN_RE.findall(stripped))
+    structural_hits = sum(1 for ch in stripped if ch in _STRUCTURAL_CHARS)
+    if token_hits == 0 and structural_hits < 2:
+        return (
+            "No recognizable Python or Java code was found in the submission. "
+            "Please paste actual source code as plain text (images and screenshots are not supported)."
+        )
+
+    return None
 
 
 def validate_python(source_code: str) -> ValidationResult:

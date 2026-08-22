@@ -2,8 +2,8 @@ import os
 from typing import List, Optional
 import google.generativeai as genai
 from pydantic import BaseModel, Field
-
 from app.config import settings
+from app.services.model_resolver import get_active_llm_model
 
 class CodeAnalysisFinding(BaseModel):
     title: str = Field(description="Short title summarizing the code quality issue")
@@ -158,7 +158,7 @@ def analyze_code_quality(source_code: str, language: str) -> List[dict]:
     genai.configure(api_key=api_key)
     
     model = genai.GenerativeModel(
-        model_name=settings.llm_model,
+        model_name=get_active_llm_model(),
         system_instruction=SYSTEM_PROMPT
     )
     

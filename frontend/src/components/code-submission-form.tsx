@@ -189,9 +189,42 @@ export function CodeSubmissionForm({ onSubmissionComplete }: CodeSubmissionFormP
     return javaScore > pyScore ? "java" : "python";
   })();
 
+  const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "gif", "bmp", "webp", "svg", "ico", "tiff", "tif", "heic", "pdf", "doc", "docx", "zip", "rar", "7z", "exe"];
+
+  // Block screenshots/images pasted directly into the code textarea
+  const handlePasteAreaPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = Array.from(e.clipboardData?.items || []);
+    const hasImage = items.some((it) => it.kind === "file" && it.type.startsWith("image/"));
+    if (hasImage) {
+      e.preventDefault();
+      setError("That's a screenshot/image, not code. This agent analyzes Python or Java source text only - paste the actual code, not an image of it.");
+    }
+  };
+
+  // Intercept files dropped onto the paste textarea: images are rejected with guidance,
+  // valid .py/.java files are routed into the upload flow.
+  const handleCodeAreaDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer?.files?.[0];
+    if (!file) return;
+    const ext = file.name.split(".").pop()?.toLowerCase() || "";
+    if (IMAGE_EXTENSIONS.includes(ext)) {
+      setError(`"${file.name}" is an image/document - screenshots cannot be analyzed. Please upload the .py or .java source file instead.`);
+      return;
+    }
+    handleFileSelect(file);
+  };
+
   const handlePasteSubmit = async () => {
     if (!sourceCode.trim()) {
       setError("Please enter source code before submitting.");
+      return;
+    }
+    const trimmed = sourceCode.trim();
+    const looksLikeFilenameOnly = /^[^\n]{0,260}\.(png|jpe?g|gif|bmp|webp|svg|ico|tiff?|heic|pdf|docx?|xlsx?|pptx?|zip|rar|7z|exe)$/i.test(trimmed);
+    const dataUri = trimmed.startsWith("data:image/");
+    if (looksLikeFilenameOnly || dataUri) {
+      setError("This doesn't look like source code (it appears to be an image/file reference). Paste your actual Python or Java code as plain text.");
       return;
     }
     setIsSubmitting(true);
@@ -301,13 +334,18 @@ export function CodeSubmissionForm({ onSubmissionComplete }: CodeSubmissionFormP
                   <Label htmlFor="source-code" className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Source Code</Label>
                   <span className="text-xs text-slate-400 font-medium">Supports Python (.py) &amp; Java (.java)</span>
                 </div>
-                <div className="w-full relative rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-1">
+                <div
+                  className="w-full relative rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-1"
+                  onDrop={handleCodeAreaDrop}
+                  onDragOver={(e) => e.preventDefault()}
+                >
                 <Textarea
                   id="source-code"
                   placeholder="Paste your Python or Java source code here..."
                   className="w-full min-h-[380px] font-mono text-sm bg-transparent border-0 resize-y focus-visible:ring-0 focus-visible:ring-offset-0 focus:outline-none focus:border-0"
                   value={sourceCode}
                   onChange={(e) => setSourceCode(e.target.value)}
+                  onPaste={handlePasteAreaPaste}
                   spellCheck="false"
                 />
               </div>
@@ -1379,6 +1417,22 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
           subtitleText = "Partial fixes applied. Some security findings require manual architectural refactoring.";
           badgeText = `Automated Re-Scan: Partial Fix (${metadata?.rescan_findings_count} Remaining Vulnerabilities)`;
           badgeColor = "bg-amber-600/90 text-white";
+        }
+
+        // Honesty guard: never present original code as "fully remediated" while security findings remain
+        const SEC_CATEGORIES = ["secrets", "sql_injection", "auth_flaw", "command_injection", "path_traversal", "xss", "insecure_crypto", "vulnerability"];
+        const secFindingCount = (submission.findings || []).filter((f) => SEC_CATEGORIES.includes(String(f.category))).length;
+        const remCode = String(submission.pr_summary?.full_remediated_code || "");
+        if (
+          isRemediationSuccess &&
+          secFindingCount > 0 &&
+          remCode.trim() !== "" &&
+          remCode.trim() === String(submission.source_code || "").trim()
+        ) {
+          titleText = "Remediation Engine Returned Unchanged Code";
+          subtitleText = `${secFindingCount} security finding(s) were detected but the remediation engine could not modify the code. Please re-run the analysis - the AI engine may be temporarily unavailable.`;
+          badgeText = `Automated Re-Scan: Not Remediated (${secFindingCount} Finding${secFindingCount > 1 ? "s" : ""} Remain)`;
+          badgeColor = "bg-red-600/90 text-white";
         }
 
         if (showDiffInFullCode) {

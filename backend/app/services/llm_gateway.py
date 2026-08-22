@@ -4,6 +4,7 @@ import time
 from typing import Optional
 import google.generativeai as genai
 from app.config import settings
+from app.services.model_resolver import get_active_llm_model
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +17,6 @@ class LLMGateway:
         self.primary_key = settings.gemini_api_key or os.getenv("GEMINI_API_KEY", "")
         self.backup_key = settings.portkey_backup_gemini_key or os.getenv("BACKUP_GEMINI_API_KEY", "")
         self.portkey_key = settings.portkey_api_key or os.getenv("PORTKEY_API_KEY", "")
-        self.default_model = settings.llm_model or "gemini-2.0-flash"
         
         # Configure primary key by default
         if self.primary_key:
@@ -32,7 +32,7 @@ class LLMGateway:
         """
         Executes an LLM request with automatic Portkey gateway routing / multi-key failover.
         """
-        model = model_name or self.default_model
+        model = model_name or get_active_llm_model()
 
         # 1. Attempt using Portkey Gateway if configured
         if self.portkey_key:

@@ -14,7 +14,7 @@ services:
       - key: XAI_API_KEY
         value: "PASTE_YOUR_GROQ_API_KEY_HERE"
       - key: LLM_MODEL
-        value: "gemini-1.5-flash"
+        value: "gemini-flash-latest" # auto-tracking alias; gemini-1.5/2.0 models are RETIRED (404)
       - key: JWT_SECRET_KEY
         generateValue: true
       - key: GITHUB_CLIENT_ID

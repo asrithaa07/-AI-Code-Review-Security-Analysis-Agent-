@@ -11,7 +11,7 @@ from app.schemas.submission import (
     SubmissionListResponse,
     SubmissionResponse,
 )
-from app.services.code_validator import detect_language, detect_language_from_filename
+from app.services.code_validator import detect_language, detect_language_from_filename, detect_non_code_input
 from app.services.submission_service import submission_service
 from app.services.report_generator import report_generator
 from app.agents.orchestrator import run_agent_analysis_pipeline
@@ -32,6 +32,10 @@ async def submit_paste(
         language = Language(payload.language.value)
     else:
         language = detect_language(payload.source_code, payload.filename)
+
+    non_code_reason = detect_non_code_input(payload.source_code, payload.filename)
+    if non_code_reason:
+        raise HTTPException(status_code=400, detail=non_code_reason)
 
     submission = submission_service.create_paste_submission(
         db=db,
@@ -71,10 +75,17 @@ async def submit_upload(
     try:
         source_code = raw.decode("utf-8")
     except UnicodeDecodeError as exc:
-        raise HTTPException(status_code=400, detail="File must be valid UTF-8 text") from exc
+        raise HTTPException(
+            status_code=400,
+            detail="File must be valid UTF-8 text. Images and screenshots cannot be analyzed - upload a .py or .java source file.",
+        ) from exc
 
     if not source_code.strip():
         raise HTTPException(status_code=400, detail="Uploaded file is empty and cannot be analyzed.")
+
+    non_code_reason = detect_non_code_input(source_code, file.filename)
+    if non_code_reason:
+        raise HTTPException(status_code=400, detail=non_code_reason)
 
     submission = submission_service.create_upload_submission(
         db=db,

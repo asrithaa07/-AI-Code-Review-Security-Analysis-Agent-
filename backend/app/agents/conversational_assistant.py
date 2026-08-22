@@ -3,8 +3,8 @@ import re
 import concurrent.futures
 from typing import Dict, List, Optional, Any
 import google.generativeai as genai
-
 from app.config import settings
+from app.services.model_resolver import get_active_llm_model
 from app.rag.indexer import knowledge_base_retriever
 
 
@@ -132,7 +132,7 @@ def generate_assistant_response(
         try:
             genai.configure(api_key=api_key)
             model = genai.GenerativeModel(
-                model_name=settings.llm_model,
+                model_name=get_active_llm_model(),
                 system_instruction=SYSTEM_PROMPT
             )
             rag_text = "\n\n".join([f"--- Source: {c.get('source', '')} ({c.get('category', '')}) ---\n{c.get('content', '')}" for c in retrieved_chunks])

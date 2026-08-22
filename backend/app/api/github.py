@@ -13,7 +13,7 @@ from app.models.user import User
 from app.api.auth import get_current_user_optional, get_current_user
 from app.services.auth_service import auth_service
 from app.services.submission_service import submission_service
-from app.services.code_validator import detect_language_from_filename, detect_language
+from app.services.code_validator import detect_language_from_filename, detect_language, detect_non_code_input
 from app.agents.orchestrator import run_agent_analysis_pipeline
 
 logger = logging.getLogger(__name__)
@@ -256,7 +256,10 @@ async def analyze_github_repo(
                         file_path = files[0].get("name")
 
         if not file_path:
-            file_path = "main.py"
+            raise HTTPException(
+                status_code=400,
+                detail="No Python (.py) or Java (.java) source file found in this repository. Images and other file types cannot be analyzed - please select a repository containing source code.",
+            )
 
         raw_file_url = f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{file_path}"
         raw_res = await client.get(raw_file_url, headers=headers)
@@ -282,6 +285,10 @@ def get_user_data(user_id):
             filename = file_path
 
     language = detect_language(source_code, filename)
+
+    non_code_reason = detect_non_code_input(source_code, filename)
+    if non_code_reason:
+        raise HTTPException(status_code=400, detail=non_code_reason)
 
     submission = submission_service.create_paste_submission(
         db=db,

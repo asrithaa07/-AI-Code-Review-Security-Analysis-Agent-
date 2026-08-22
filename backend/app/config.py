@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     logfire_token: str = ""
     langsmith_api_key: str = ""
     enable_observability: bool = True
-    llm_model: str = "gemini-2.0-flash"
+    llm_model: str = "gemini-flash-latest"  # gemini-1.5/2.0 models are RETIRED by Google (404); resolver falls back to live models
     secret_key: str = "super-secret-key-for-development-spotlight-ai"
     access_token_expire_minutes: int = 10080  # 7 days in minutes
 

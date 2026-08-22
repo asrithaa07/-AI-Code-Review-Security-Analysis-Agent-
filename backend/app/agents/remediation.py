@@ -7,6 +7,7 @@ import google.generativeai as genai
 from pydantic import BaseModel, Field
 
 from app.config import settings
+from app.services.model_resolver import get_active_llm_model
 
 SECURITY_CATEGORIES = {
     "secrets", "sql_injection", "auth_flaw", "command_injection",
@@ -216,7 +217,7 @@ def generate_remediations(source_code: str, language: str, findings: List[Dict])
 
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel(
-        model_name=settings.llm_model,
+        model_name=get_active_llm_model(),
         system_instruction=SYSTEM_PROMPT
     )
 
@@ -384,6 +385,30 @@ def _generate_dynamic_full_remediated_code(source_code: str, language: str, find
         elif "innerHTML" in stripped and not stripped.startswith("//") and not stripped.startswith("#"):
             line = f"{indent}" + stripped.replace(".innerHTML", ".textContent")
 
+        # 5b. Unsafe YAML deserialization
+        elif language.lower() == "python" and re.search(r"\byaml\.load\(", stripped) and "safe_load" not in stripped:
+            line = line.replace("yaml.load(", "yaml.safe_load(")
+
+        # 5c. Disabled TLS certificate verification
+        elif re.search(r"verify\s*=\s*False", stripped):
+            line = re.sub(r"verify\s*=\s*False", "verify=True", line)
+
+        # 5d. Flask/production debug mode enabled
+        elif re.search(r"\bdebug\s*=\s*True\b", stripped) and ("app.run" in stripped or "run(" in stripped or "Flask(" in stripped):
+            line = re.sub(r"\bdebug\s*=\s*True\b", "debug=False", line)
+
+        # 5e. Insecure randomness for security-sensitive values (tokens/passwords/OTPs)
+        elif (
+            language.lower() == "python"
+            and any(k in stripped.lower() for k in ["token", "password", "secret", "otp", "nonce", "session_id"])
+            and re.search(r"\brandom\.(random|randint|choice|randrange|getrandbits|uniform)\s*\(", stripped)
+        ):
+            line = f"{indent}{stripped.split('=')[0].strip()} = secrets.token_hex(16)"
+
+        # 5f. Weak JWT 'none' algorithm
+        elif re.search(r"algorithm\s*[=:]\s*[\"']none[\"']", stripped):
+            line = re.sub(r"algorithm\s*[=:]\s*[\"']none[\"']", "algorithm=\"HS256\"", line)
+
         # 6. Deep Nesting / Arrow Anti-Pattern static refactor
         elif any(f.get("category") == "complexity" or "nested" in str(f.get("title", "")).lower() for f in findings) and ("if (" in stripped or "if(" in stripped):
             if any(term in stripped for term in ["userId != null", "userId.isEmpty()", "amount > 0", "amount <= 10000", "isValidated"]):
@@ -414,6 +439,13 @@ def _generate_dynamic_full_remediated_code(source_code: str, language: str, find
         final_lines.append(line)
 
     raw_code = "\n".join(final_lines)
+
+    # Ensure modules referenced by injected patches are imported
+    if "secrets.token_hex(" in raw_code and "import secrets" not in raw_code:
+        raw_code = "import secrets\n" + raw_code
+    if "bcrypt.hashpw(" in raw_code and "import bcrypt" not in raw_code:
+        raw_code = "import bcrypt\n" + raw_code
+
     return heal_syntax_and_quality_code(raw_code, language)
 
 
@@ -612,7 +644,7 @@ def generate_full_remediated_code(source_code: str, language: str, findings: Lis
             print("[REMEDIATION] LLM CALL INITIATED - Option 1 Full Source Remediation Prompt (Security + Quality)...")
             genai.configure(api_key=api_key)
             model = genai.GenerativeModel(
-                model_name=settings.llm_model,
+                model_name=get_active_llm_model(),
                 system_instruction=FULL_REMEDIATION_SYSTEM_PROMPT
             )
             # Add strict generation configurations for experimental 3.6-flash environments
@@ -638,7 +670,7 @@ def generate_full_remediated_code(source_code: str, language: str, findings: Lis
             gemini_error = str(e)
             print(f"[REMEDIATION] WARN: Gemini full code remediation call failed ({e}).")
 
-    xai_api_key = settings.xai_api_key or os.environ.get("XAI_API_KEY")
+    xai_api_key = settings.xai_api_key or os.environ.get("XAI_API_KEY") or os.environ.get("GROQ_API_KEY")
     if xai_api_key:
         try:
             print("[REMEDIATION] GROQ FALLBACK INITIATED - Routing through OpenAI SDK to Groq...")
@@ -670,9 +702,12 @@ def generate_full_remediated_code(source_code: str, language: str, findings: Lis
             groq_error = str(e)
             print(f"[REMEDIATION] WARN: xAI full code remediation call failed ({e}).")
 
-    # If completely failed due to API quota blockages, print the raw debug payload as the code
-    debug_code = f"# /// AI INFRASTRUCTURE BLOCK ///\n# The Generative APIs physically blocked your request.\n# Gemini Error: {gemini_error if 'gemini_error' in locals() else 'None'}\n# Groq Error: {groq_error if 'groq_error' in locals() else 'None'}\n\n# Original Code below:\n{source_code}"
-    return heal_syntax_and_quality_code(debug_code, language), "Pipeline Execution Block"
+    # All LLM engines failed (invalid keys, quota exhaustion, connectivity).
+    # NEVER leak raw provider error strings into the user-visible remediated code.
+    # Return the source untouched so downstream self-healing can apply the static
+    # surgical patcher and report an honest remediation_status to the user.
+    print(f"[REMEDIATION] All LLM engines unavailable. Gemini Error: {gemini_error if 'gemini_error' in locals() else 'None'} | Groq Error: {groq_error if 'groq_error' in locals() else 'None'}")
+    return source_code, "Remediation Unavailable (LLM engines offline)"
 
 
 def run_self_healing_remediation(

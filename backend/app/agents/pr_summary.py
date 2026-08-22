@@ -3,8 +3,8 @@ import json
 from typing import List, Dict, Any, Optional
 import google.generativeai as genai
 from pydantic import BaseModel, Field
-
 from app.config import settings
+from app.services.model_resolver import get_active_llm_model
 
 
 class OWASPMappingItem(BaseModel):
@@ -135,7 +135,7 @@ def generate_pr_summary(
     genai.configure(api_key=api_key)
     
     model = genai.GenerativeModel(
-        model_name=settings.llm_model,
+        model_name=get_active_llm_model(),
         system_instruction=SYSTEM_PROMPT
     )
 
