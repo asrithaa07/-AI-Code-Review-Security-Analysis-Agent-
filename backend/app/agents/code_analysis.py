@@ -164,21 +164,21 @@ def analyze_code_quality(source_code: str, language: str) -> List[dict]:
     
     prompt = f"Analyze the following {language} code:\n\n{source_code}"
     
-    response = model.generate_content(
-        prompt,
-        generation_config=genai.GenerationConfig(
-            response_mime_type="application/json",
-            response_schema=CodeAnalysisResult
-        )
-    )
-    
-    # Parse output
     try:
+        response = model.generate_content(
+            prompt,
+            generation_config=genai.GenerationConfig(
+                response_mime_type="application/json",
+                response_schema=CodeAnalysisResult
+            )
+        )
+        
+        # Parse output
         if not response.parts:
             print("WARN: Gemini response has no parts (e.g. Recitation/Safety block).")
             return perform_dynamic_code_analysis(source_code, language)
         result = CodeAnalysisResult.model_validate_json(response.text)
         return [finding.model_dump() for finding in result.findings]
     except Exception as e:
-        print(f"WARN: Gemini code analysis parse failed or blocked ({e}). Falling back to static engine.")
+        print(f"WARN: Gemini code analysis generation or parse failed ({e}). Falling back to static engine.")
         return perform_dynamic_code_analysis(source_code, language)
