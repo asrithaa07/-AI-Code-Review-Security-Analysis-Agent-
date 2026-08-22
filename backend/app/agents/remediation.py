@@ -862,7 +862,7 @@ def run_self_healing_remediation(
     if not is_code_changed:
         print("[REMEDIATION] Candidate code unchanged by LLM -> Forcing static surgical patcher...")
         accepted_remediated_code = _generate_dynamic_full_remediated_code(uploaded_source_code, language, initial_findings)
-        final_rescan = scan_security_vulnerabilities(accepted_remediated_code, language)
+        final_rescan = perform_static_security_scan(accepted_remediated_code, language)
         if len(final_rescan) == 0:
             rescan_passed = True
             all_vulnerabilities_fixed = True
@@ -888,7 +888,7 @@ def run_self_healing_remediation(
         remediation_error = f"{len(post_remediation_sec_findings)} security vulnerability(ies) remain unresolved."
         accepted_remediated_code = accepted_remediated_code or _generate_dynamic_full_remediated_code(uploaded_source_code, language, initial_findings)
         # Final rescan for the static patcher to correctly measure remaining quality issues
-        post_remediation_qual_findings = analyze_code_quality(accepted_remediated_code, language)
+        post_remediation_qual_findings = perform_dynamic_code_analysis(accepted_remediated_code, language)
 
     return {
         "original_findings": initial_findings,
