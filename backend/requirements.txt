@@ -24,11 +24,11 @@ langchain==0.3.14
 langchain-community==0.3.14
 langchain-text-splitters==0.3.4
 chromadb==0.5.23
-langchain-google-genai==2.0.8
+langchain-google-genai
 
 # AI (for future milestones)
 langgraph==0.2.60
-google-generativeai==0.8.3
+google-generativeai
 openai==1.59.3
 
 # Utilities
