@@ -10,7 +10,7 @@ services:
       - key: PYTHON_VERSION
         value: 3.11.0 # Standardize python version on Render
       - key: GEMINI_API_KEY
-        sync: false
+        value: "PASTE_YOUR_AQ_OR_AIZASY_KEY_HERE"
       - key: LLM_MODEL
         value: "gemini-1.5-flash"
       - key: JWT_SECRET_KEY
