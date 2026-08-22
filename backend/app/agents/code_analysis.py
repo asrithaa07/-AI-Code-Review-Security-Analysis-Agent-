@@ -177,8 +177,31 @@ def analyze_code_quality(source_code: str, language: str) -> List[dict]:
         if not response.parts:
             print("WARN: Gemini response has no parts (e.g. Recitation/Safety block).")
             return perform_dynamic_code_analysis(source_code, language)
-        result = CodeAnalysisResult.model_validate_json(response.text)
+        raw_text = response.text.replace("```json\n", "").replace("```json", "").replace("\n```", "").replace("```", "").strip()
+        result = CodeAnalysisResult.model_validate_json(raw_text)
         return [finding.model_dump() for finding in result.findings]
     except Exception as e:
-        print(f"WARN: Gemini code analysis generation or parse failed ({e}). Falling back to static engine.")
+        print(f"WARN: Gemini code analysis generation or parse failed ({e}). Falling back to Groq...")
+        
+        xai_api_key = settings.xai_api_key or os.environ.get("XAI_API_KEY")
+        if xai_api_key:
+            try:
+                import openai
+                import json
+                client = openai.OpenAI(api_key=xai_api_key, base_url="https://api.groq.com/openai/v1")
+                res = client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=[
+                        {"role": "system", "content": SYSTEM_PROMPT + "\nMust return strict JSON matching `{\"findings\": [{...}]}`."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    response_format={"type": "json_object"}
+                )
+                data = json.loads(res.choices[0].message.content)
+                if "findings" in data: return data["findings"]
+                return data
+            except Exception as ex:
+                print(f"WARN: Groq code analysis fallback failed ({ex}). Falling back to static engine.")
+                return perform_dynamic_code_analysis(source_code, language)
+                
         return perform_dynamic_code_analysis(source_code, language)
