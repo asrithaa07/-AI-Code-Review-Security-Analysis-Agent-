@@ -110,7 +110,8 @@ def validate_remediated_code(remediated_code: str, language: str, original_findi
     if source_code:
         orig_lines = [l for l in source_code.splitlines() if l.strip()]
         rem_lines = [l for l in remediated_code.splitlines() if l.strip()]
-        if len(orig_lines) > 10 and len(rem_lines) < len(orig_lines) * 0.6:
+        # Relaxed from 0.6 to 0.35 because gemini-3.6-flash can sometimes aggressively condense duplicate code implementations
+        if len(orig_lines) > 10 and len(rem_lines) < len(orig_lines) * 0.35:
             errors.append(f"Remediated code is truncated ({len(rem_lines)} lines vs {len(orig_lines)} original lines). Structural preservation failed.")
 
     # 2. Check for remaining raw SQL concatenation ONLY IF SQL Injection was flagged
@@ -613,7 +614,14 @@ def generate_full_remediated_code(source_code: str, language: str, findings: Lis
                 model_name=settings.llm_model,
                 system_instruction=FULL_REMEDIATION_SYSTEM_PROMPT
             )
-            res = model.generate_content(prompt)
+            # Add strict generation configurations for experimental 3.6-flash environments
+            res = model.generate_content(
+                prompt,
+                generation_config=genai.types.GenerationConfig(
+                    max_output_tokens=8192,
+                    temperature=0.1
+                )
+            )
             print(f"[REMEDIATION] LLM RESPONSE RECEIVED - Text length: {len(res.text)}")
 
             clean_text = extract_single_source_file(res.text)
@@ -633,14 +641,14 @@ def generate_full_remediated_code(source_code: str, language: str, findings: Lis
     xai_api_key = settings.xai_api_key or os.environ.get("XAI_API_KEY")
     if xai_api_key:
         try:
-            print("[REMEDIATION] XAI FALLBACK INITIATED - Routing through OpenAI SDK to Grok...")
+            print("[REMEDIATION] GROQ FALLBACK INITIATED - Routing through OpenAI SDK to Groq...")
             import openai
             client = openai.OpenAI(
                 api_key=xai_api_key,
-                base_url="https://api.x.ai/v1",
+                base_url="https://api.groq.com/openai/v1",
             )
             completion = client.chat.completions.create(
-                model="grok-2-latest",
+                model="llama-3.3-70b-versatile",
                 messages=[
                     {"role": "system", "content": FULL_REMEDIATION_SYSTEM_PROMPT},
                     {"role": "user", "content": prompt},
