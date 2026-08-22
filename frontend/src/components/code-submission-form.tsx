@@ -613,7 +613,7 @@ export function SubmissionResult({ submission: initialSubmission }: { submission
   const [assistantQuery, setAssistantQuery] = useState<string | undefined>(undefined);
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
   const [copiedFullCode, setCopiedFullCode] = useState<boolean>(false);
-  const [showDiffInFullCode, setShowDiffInFullCode] = useState<boolean>(false);
+  const [showDiffInFullCode, setShowDiffInFullCode] = useState<boolean>(true);
   const [rightPanelTab, setRightPanelTab] = useState<"code" | "remediation">("code");
 
   // Sync state if initialSubmission changes from parent
