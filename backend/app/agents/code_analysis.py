@@ -174,15 +174,11 @@ def analyze_code_quality(source_code: str, language: str) -> List[dict]:
     
     # Parse output
     try:
+        if not response.parts:
+            print("WARN: Gemini response has no parts (e.g. Recitation/Safety block).")
+            return perform_dynamic_code_analysis(source_code, language)
         result = CodeAnalysisResult.model_validate_json(response.text)
         return [finding.model_dump() for finding in result.findings]
     except Exception as e:
-        # Fallback in case of parse error
-        import json
-        try:
-            data = json.loads(response.text)
-            if "findings" in data:
-                return data["findings"]
-            return data
-        except Exception:
-            raise ValueError(f"Failed to parse Code Analysis Agent response: {response.text}") from e
+        print(f"WARN: Gemini code analysis parse failed or blocked ({e}). Falling back to static engine.")
+        return perform_dynamic_code_analysis(source_code, language)
