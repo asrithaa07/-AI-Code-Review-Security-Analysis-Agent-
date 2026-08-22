@@ -588,11 +588,12 @@ def generate_full_remediated_code(source_code: str, language: str, findings: Lis
     If LLM is unconfigured or fails, falls back to surgical line-by-line patcher.
     """
     if not findings:
-        print("[REMEDIATION] No findings flagged. Preserving original source code.")
-        return source_code, "Static Fallback"
+        print("[REMEDIATION] No findings flagged. Forcing AI to perform general code optimization pass.")
+        target_findings = [{"title": "General Code Optimization", "description": "Ensure the highest standard of clean code, security best practices, and readability across the entire file."}]
+    else:
+        target_findings = findings.copy()
 
     sec_findings = filter_security_vulnerabilities(findings)
-    target_findings = findings.copy()
     print(f"[REMEDIATION] generate_full_remediated_code: {len(findings)} total findings ({len(sec_findings)} security).")
 
     orig_sha256 = get_code_sha256(source_code)
