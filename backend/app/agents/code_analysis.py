@@ -183,20 +183,33 @@ def analyze_code_quality(source_code: str, language: str) -> List[dict]:
     except Exception as e:
         print(f"WARN: Gemini code analysis generation or parse failed ({e}). Falling back to Groq...")
         
-        xai_api_key = settings.xai_api_key or os.environ.get("XAI_API_KEY")
+        xai_api_key = settings.xai_api_key or os.environ.get("XAI_API_KEY") or os.environ.get("GROQ_API_KEY")
         if xai_api_key:
             try:
                 import openai
                 import json
                 client = openai.OpenAI(api_key=xai_api_key, base_url="https://api.groq.com/openai/v1")
-                res = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
-                    messages=[
-                        {"role": "system", "content": SYSTEM_PROMPT + "\nMust return strict JSON matching `{\"findings\": [{...}]}`."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    response_format={"type": "json_object"}
-                )
+                # llama-3.3-70b-versatile retired; try current Groq catalog in order
+                res = None
+                last_err = None
+                for groq_model in ["openai/gpt-oss-120b", "qwen/qwen3.6-27b", "groq/compound-mini"]:
+                    try:
+                        res = client.chat.completions.create(
+                            model=groq_model,
+                            messages=[
+                                {"role": "system", "content": SYSTEM_PROMPT + "\nMust return strict JSON matching `{\"findings\": [{...}]}`."},
+                                {"role": "user", "content": prompt}
+                            ],
+                            response_format={"type": "json_object"}
+                        )
+                        break
+                    except Exception as model_err:
+                        last_err = model_err
+                        if any(sig in str(model_err).lower() for sig in ["not found", "404", "does not exist"]):
+                            continue
+                        raise
+                if res is None:
+                    raise RuntimeError(f"All Groq models failed: {last_err}")
                 data = json.loads(res.choices[0].message.content)
                 if "findings" in data: return data["findings"]
                 return data

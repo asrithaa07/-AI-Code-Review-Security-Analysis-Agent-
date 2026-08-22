@@ -728,13 +728,28 @@ def generate_full_remediated_code(source_code: str, language: str, findings: Lis
                 api_key=xai_api_key,
                 base_url="https://api.groq.com/openai/v1",
             )
-            completion = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[
-                    {"role": "system", "content": FULL_REMEDIATION_SYSTEM_PROMPT},
-                    {"role": "user", "content": prompt},
-                ],
-            )
+            # llama-3.3-70b-versatile was retired by Groq; try current catalog in order
+            groq_models = ["openai/gpt-oss-120b", "qwen/qwen3.6-27b", "groq/compound-mini"]
+            completion = None
+            for groq_model in groq_models:
+                try:
+                    completion = client.chat.completions.create(
+                        model=groq_model,
+                        messages=[
+                            {"role": "system", "content": FULL_REMEDIATION_SYSTEM_PROMPT},
+                            {"role": "user", "content": prompt},
+                        ],
+                    )
+                    print(f"[REMEDIATION] Groq model '{groq_model}' accepted.")
+                    break
+                except Exception as ge:
+                    groq_error = str(ge)
+                    print(f"[REMEDIATION] WARN: Groq model '{groq_model}' failed ({ge}).")
+                    if any(sig in groq_error.lower() for sig in ["not found", "404", "does not exist"]):
+                        continue  # try next model in catalog
+                    break  # auth/quota errors won't be fixed by another model name
+            if completion is None:
+                raise RuntimeError(f"All Groq models failed. Last error: {groq_error}")
             res_text = completion.choices[0].message.content
             print(f"[REMEDIATION] XAI RESPONSE RECEIVED - Text length: {len(res_text)}")
 
@@ -746,7 +761,7 @@ def generate_full_remediated_code(source_code: str, language: str, findings: Lis
             print(f"[REMEDIATION] XAI CANDIDATE SHA-256: {get_code_sha256(clean_text)}, Syntax Valid: {is_valid}")
 
             # FORCED BYPASS
-            return clean_text, "Groq / Llama"
+            return clean_text, "Groq / GPT-OSS"
         except Exception as e:
             groq_error = str(e)
             print(f"[REMEDIATION] WARN: xAI full code remediation call failed ({e}).")
