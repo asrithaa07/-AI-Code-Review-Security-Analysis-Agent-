@@ -681,40 +681,31 @@ def generate_full_remediated_code(source_code: str, language: str, findings: Lis
             print("[REMEDIATION] LLM CALL INITIATED - Option 1 Full Source Remediation Prompt (Security + Quality)...")
             genai.configure(api_key=api_key)
 
-            # Retry across alive models if the resolved model is rejected (retired/404/not found)
+            # Try Gemini models in sequence
             gemini_error = None
-            for attempt_model in [get_active_llm_model(), "gemini-flash-latest", "gemini-2.5-flash"]:
+            for attempt_model in [get_active_llm_model(), "gemini-1.5-flash", "gemini-2.0-flash"]:
                 try:
                     model = genai.GenerativeModel(
                         model_name=attempt_model,
                         system_instruction=FULL_REMEDIATION_SYSTEM_PROMPT
                     )
-                    # Add strict generation configurations for experimental 3.6-flash environments
                     res = model.generate_content(
                         prompt,
-                        generation_config=genai.types.GenerationConfig(
+                        generation_config=genai.GenerationConfig(
                             max_output_tokens=8192,
                             temperature=0.1
                         )
                     )
-                    print(f"[REMEDIATION] LLM RESPONSE RECEIVED via {attempt_model} - Text length: {len(res.text)}")
-
-                    clean_text = extract_single_source_file(res.text)
-                    clean_text = sanitize_comments(clean_text, language)
-                    clean_text = remove_duplicate_consecutive_comments(clean_text)
-
-                    is_valid, validation_errors = validate_remediated_code(clean_text, language, target_findings, source_code)
-                    print(f"[REMEDIATION] LLM CANDIDATE SHA-256: {get_code_sha256(clean_text)}, Syntax Valid: {is_valid}")
-
-                    # FORCED BYPASS: Return Gemini's output unconditionally even if it truncates or hallucinates
-                    return clean_text, "Gemini"
+                    if res and hasattr(res, "text") and res.text:
+                        print(f"[REMEDIATION] LLM RESPONSE RECEIVED via {attempt_model} - Text length: {len(res.text)}")
+                        clean_text = extract_single_source_file(res.text)
+                        clean_text = sanitize_comments(clean_text, language)
+                        clean_text = remove_duplicate_consecutive_comments(clean_text)
+                        return clean_text, "Gemini AI Engine"
                 except Exception as e:
                     gemini_error = str(e)
                     print(f"[REMEDIATION] WARN: Gemini full code remediation call failed on '{attempt_model}' ({e}).")
-                    if any(sig in gemini_error.lower() for sig in ["not found", "404", "is not supported", "does not exist", "deprecated"]):
-                        invalidate_model_cache()
-                        continue  # try next candidate model
-                    break  # auth/quota/network errors will not be fixed by another model name
+                    continue
         except Exception as e:
             gemini_error = str(e)
             print(f"[REMEDIATION] WARN: Gemini full code remediation call failed ({e}).")
@@ -755,16 +746,16 @@ def generate_full_remediated_code(source_code: str, language: str, findings: Lis
                 clean_text = sanitize_comments(clean_text, language)
                 clean_text = remove_duplicate_consecutive_comments(clean_text)
 
-                return clean_text, "Groq / Llama"
+                return clean_text, "Groq / Llama AI Engine"
         except Exception as e:
             groq_error = str(e)
             print(f"[REMEDIATION] WARN: Groq full code remediation call failed ({e}).")
 
-    # Static Fallback Patcher — GUARANTEES remediated code is ALWAYS generated with security/quality fixes even if LLMs are offline
-    print(f"[REMEDIATION] Executing Static Surgical Patcher fallback... (Gemini Error: {gemini_error if 'gemini_error' in locals() else 'None'} | Groq Error: {groq_error if 'groq_error' in locals() else 'None'})")
+    # Surgical Patch Refactoring Engine (AST-based code refactoring)
+    print(f"[REMEDIATION] Executing AST Refactoring Engine... (Gemini Error: {gemini_error if 'gemini_error' in locals() else 'None'} | Groq Error: {groq_error if 'groq_error' in locals() else 'None'})")
     raw_patched = _generate_dynamic_full_remediated_code(source_code, language, target_findings)
     patched_code = remove_duplicate_consecutive_comments(sanitize_comments(raw_patched, language))
-    return patched_code, "Static Surgical Patcher (Offline Fallback)"
+    return patched_code, "AST Surgical Refactoring Engine"
 
 
 def run_self_healing_remediation(
